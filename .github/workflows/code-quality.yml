@@ -15,7 +15,7 @@ jobs:
     name: Code Quality Analysis
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0  # Fetch full history for better analysis
     
@@ -94,7 +94,7 @@ jobs:
     name: Test Coverage Analysis
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     
     - name: Set up Python 3.12
       uses: actions/setup-python@v4
