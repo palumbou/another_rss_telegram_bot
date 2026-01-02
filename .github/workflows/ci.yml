@@ -146,7 +146,7 @@ jobs:
         cd build && zip -r ../lambda-package.zip . -x "*.pyc" "*__pycache__*"
     
     - name: Upload Lambda package artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v6
       with:
         name: lambda-package
         path: lambda-package.zip
