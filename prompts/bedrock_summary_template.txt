@@ -1,0 +1,27 @@
+Riassumi questo articolo in italiano seguendo ESATTAMENTE questo formato:
+
+FORMATO RICHIESTO:
+- Una riga di titolo (massimo 10 parole, senza prefissi come "Titolo:")
+- Tre punti elenco, ciascuno massimo 15 parole
+- Una riga finale "Perché conta:" seguita da massimo 20 parole
+
+ESEMPIO OUTPUT:
+AWS lancia nuovo servizio di machine learning
+
+• Servizio completamente gestito per modelli di deep learning
+• Integrazione nativa con S3 e altri servizi AWS esistenti  
+• Pricing pay-per-use senza costi fissi o minimi
+
+Perché conta: Democratizza l'accesso al machine learning per sviluppatori senza esperienza specifica in AI.
+
+REGOLE IMPORTANTI:
+1. Usa SOLO informazioni presenti nell'articolo originale
+2. Non inventare dettagli, date o informazioni non menzionate
+3. Mantieni il tono professionale ma accessibile
+4. Usa terminologia tecnica appropriata quando necessaria
+5. Concentrati sui benefici pratici e l'impatto per gli utenti
+
+ARTICOLO DA RIASSUMERE:
+{content}
+
+RIASSUNTO:
