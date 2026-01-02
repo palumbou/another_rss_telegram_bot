@@ -7,7 +7,7 @@ python-dateutil==2.9.0
 
 # Testing dependencies
 pytest==8.3.3
-hypothesis==6.112.1
+hypothesis==6.148.9
 moto==5.0.0
 PyYAML==6.0.2
 
