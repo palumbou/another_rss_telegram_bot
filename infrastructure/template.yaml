@@ -30,6 +30,25 @@ Parameters:
     MinLength: 10
     ConstraintDescription: 'Must be a valid Telegram bot token'
   
+  TelegramSecretName:
+    Type: String
+    Description: 'Name of the Secrets Manager secret containing the Telegram bot token'
+    MinLength: 1
+    ConstraintDescription: 'Must be a valid secret name'
+  
+  # Lambda deployment parameters
+  LambdaS3Bucket:
+    Type: String
+    Description: 'S3 bucket containing the Lambda deployment package'
+    MinLength: 1
+    ConstraintDescription: 'Must be a valid S3 bucket name'
+  
+  LambdaS3Key:
+    Type: String
+    Description: 'S3 key for the Lambda deployment package'
+    MinLength: 1
+    ConstraintDescription: 'Must be a valid S3 key'
+  
   # Schedule configuration
   ScheduleExpression:
     Type: String
@@ -92,26 +111,13 @@ Resources:
         - Key: Component
           Value: Deduplication
   
-  # Secrets Manager secret for Telegram bot token (Requirements 9.1, 9.2)
-  TelegramBotSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub '${BotName}-telegram-token'
-      Description: 'Telegram bot token for RSS bot'
-      SecretString: !Ref TelegramBotToken
-      Tags:
-        - Key: Application
-          Value: !Ref BotName
-        - Key: Component
-          Value: TelegramBot
-  
   # SQS Dead Letter Queue for error handling (Requirements 3.5, 8.3, 10.1)
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub '${BotName}-dlq'
       MessageRetentionPeriod: 1209600  # 14 days
-      VisibilityTimeoutSeconds: 60
+      VisibilityTimeout: 60
       Tags:
         - Key: Application
           Value: !Ref BotName
@@ -161,7 +167,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !Ref TelegramBotSecret
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${BotName}-telegram-token-*'
         - PolicyName: BedrockAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -205,19 +211,17 @@ Resources:
       Handler: src.lambda_handler.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
-        ZipFile: |
-          # Placeholder code - will be replaced during deployment
-          def lambda_handler(event, context):
-              return {'statusCode': 200, 'body': 'Placeholder'}
+        S3Bucket: !Ref LambdaS3Bucket
+        S3Key: !Ref LambdaS3Key
       Timeout: !Ref LambdaTimeout
       MemorySize: !Ref LambdaMemorySize
       Environment:
         Variables:
-          TELEGRAM_SECRET_NAME: !Ref TelegramBotSecret
+          TELEGRAM_SECRET_NAME: !Ref TelegramSecretName
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
           DYNAMODB_TABLE: !Ref DeduplicationTable
           RSS_FEED_URLS: !Join [',', !Ref RSSFeedUrls]
-          AWS_REGION: !Ref AWS::Region
+          CURRENT_AWS_REGION: !Ref AWS::Region
           LOG_LEVEL: INFO
       DeadLetterConfig:
         TargetArn: !GetAtt DeadLetterQueue.Arn
@@ -382,7 +386,7 @@ Outputs:
   
   SecretsManagerSecretName:
     Description: 'Name of the Secrets Manager secret containing Telegram bot token'
-    Value: !Ref TelegramBotSecret
+    Value: !Sub '${BotName}-telegram-token'
     Export:
       Name: !Sub '${AWS::StackName}-TelegramSecret'
   

@@ -128,7 +128,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 main_logger.log_item_processing(item.title, "summarized")
 
                 # Send to Telegram
-                success = telegram_publisher.send_message(summary, item.link)
+                success = telegram_publisher.send_message(summary, item.link, item.feed_url)
                 if success:
                     metrics["messages_sent"] += 1
                     main_logger.log_item_processing(item.title, "sent_to_telegram")

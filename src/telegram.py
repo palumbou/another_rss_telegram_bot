@@ -27,13 +27,14 @@ class TelegramPublisher:
             retry_attempts=config.retry_attempts,
         )
 
-    def send_message(self, summary: Summary, original_link: str) -> bool:
+    def send_message(self, summary: Summary, original_link: str, source_url: str = "") -> bool:
         """
         Send a formatted message to Telegram.
 
         Args:
             summary: The summary to send
             original_link: Link to the original article
+            source_url: URL of the RSS feed source (optional)
 
         Returns:
             True if message was sent successfully, False otherwise
@@ -43,8 +44,9 @@ class TelegramPublisher:
                 "Preparing to send message",
                 summary_title=summary.title,
                 original_link=original_link,
+                source_url=source_url,
             )
-            message = self.format_message(summary, original_link)
+            message = self.format_message(summary, original_link, source_url)
             success = self._send_telegram_message(message)
 
             if success:
@@ -63,13 +65,14 @@ class TelegramPublisher:
             )
             return False
 
-    def format_message(self, summary: Summary, link: str) -> str:
+    def format_message(self, summary: Summary, link: str, source_url: str = "") -> str:
         """
         Format a message for Telegram with HTML parsing.
 
         Args:
             summary: The summary to format
             link: Link to the original article
+            source_url: URL of the RSS feed source (optional)
 
         Returns:
             Formatted HTML message
@@ -87,6 +90,12 @@ class TelegramPublisher:
 
         message += f"\n<i>Perché conta:</i> {why_it_matters}\n\n"
         message += f'🔗 <a href="{link}">Leggi l\'articolo completo</a>'
+        
+        # Add source information if available
+        if source_url:
+            source_name = self._extract_source_name(source_url)
+            if source_name:
+                message += f"\n📰 <i>Fonte: {source_name}</i>"
 
         return message
 
@@ -219,3 +228,65 @@ class TelegramPublisher:
         text = text.replace("'", "&#x27;")
 
         return text
+
+    def _extract_source_name(self, feed_url: str) -> str:
+        """
+        Extract a clean source name from a feed URL.
+
+        Args:
+            feed_url: The RSS feed URL
+
+        Returns:
+            Clean source name for display
+        """
+        if not feed_url:
+            return ""
+
+        try:
+            from urllib.parse import urlparse
+            
+            parsed = urlparse(feed_url)
+            domain = parsed.netloc.lower()
+            
+            # Remove common prefixes
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            if domain.startswith('feeds.'):
+                domain = domain[6:]
+            
+            # Map common domains to friendly names
+            domain_mapping = {
+                'github.com': 'GitHub Blog',
+                'aws.amazon.com': 'AWS Blog',
+                'feedburner.com': 'O\'Reilly Radar',  # Common for O'Reilly feeds
+                'feeds.feedburner.com': 'O\'Reilly Radar',
+                'techcrunch.com': 'TechCrunch',
+                'blog.google': 'Google Blog',
+                'microsoft.com': 'Microsoft Blog',
+                'apple.com': 'Apple Newsroom',
+                'meta.com': 'Meta Blog',
+                'openai.com': 'OpenAI Blog',
+                'anthropic.com': 'Anthropic Blog',
+            }
+            
+            # Check for exact matches first
+            if domain in domain_mapping:
+                return domain_mapping[domain]
+            
+            # Check for partial matches
+            for key, value in domain_mapping.items():
+                if key in domain or domain in key:
+                    return value
+            
+            # For unknown domains, create a clean name
+            # Remove common TLDs and capitalize
+            domain_parts = domain.split('.')
+            if len(domain_parts) >= 2:
+                main_domain = domain_parts[-2]  # Get the main part before TLD
+                return main_domain.capitalize()
+            
+            return domain.capitalize()
+            
+        except Exception:
+            # If anything fails, return empty string
+            return ""

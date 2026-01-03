@@ -19,7 +19,7 @@ class TelegramConfig:
 class BedrockConfig:
     """Configuration for Amazon Bedrock."""
 
-    model_id: str = "anthropic.claude-3-haiku-20240307-v1:0"
+    model_id: str = "eu.meta.llama3-2-1b-instruct-v1:0"
     region: str = "us-east-1"
     max_tokens: int = 1000
 
@@ -52,7 +52,7 @@ class Config:
         )
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
         self.dynamodb_table = os.getenv("DYNAMODB_TABLE", "rss-telegram-dedup")
-        self.aws_region = os.getenv("AWS_REGION", "us-east-1")
+        self.aws_region = os.getenv("CURRENT_AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
 
     def get_feed_urls(self) -> list[str]:
         """Get RSS feed URLs from environment or use defaults."""
