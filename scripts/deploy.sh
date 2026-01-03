@@ -476,6 +476,7 @@ deploy_pipeline_stack() {
     local telegram_token="$5"
     local chat_id="$6"
     local bedrock_model="$7"
+    local bucket_name="$8"
     
     print_header "Deploying Pipeline Stack"
     
@@ -486,6 +487,7 @@ deploy_pipeline_stack() {
         print_status "  ApplicationStackName: $app_stack_name"
         print_status "  TelegramChatId: $chat_id"
         print_status "  BedrockModelId: $bedrock_model"
+        print_status "  ArtifactBucketName: $bucket_name"
         return 0
     fi
     
@@ -502,6 +504,7 @@ deploy_pipeline_stack() {
             "TelegramBotToken=$telegram_token" \
             "TelegramChatId=$chat_id" \
             "BedrockModelId=$bedrock_model" \
+            "ArtifactBucketName=$bucket_name" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$region" \
         --no-fail-on-empty-changeset
@@ -739,7 +742,7 @@ main() {
     validate_bedrock_model "$bedrock_model" "$region"
     validate_feeds_file "$feeds_file"
     create_s3_bucket "$bucket_name" "$region"
-    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id" "$bedrock_model"
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id" "$bedrock_model" "$bucket_name"
     create_source_package "$feeds_file"
     upload_source_and_trigger "$bucket_name" "$region"
     
