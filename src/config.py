@@ -21,7 +21,7 @@ class TelegramConfig:
 class BedrockConfig:
     """Configuration for Amazon Bedrock."""
 
-    model_id: str = "eu.meta.llama3-2-1b-instruct-v1:0"
+    model_id: str = "amazon.nova-micro-v1:0"
     region: str = "us-east-1"
     max_tokens: int = 1000
 
@@ -49,6 +49,7 @@ class Config:
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
         self.dynamodb_table = os.getenv("DYNAMODB_TABLE", "rss-telegram-dedup")
         self.aws_region = os.getenv("CURRENT_AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
+        self.bedrock_model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-micro-v1:0")
 
     def get_feed_urls(self) -> list[str]:
         """Get RSS feed URLs from feeds.json file."""
@@ -92,7 +93,10 @@ class Config:
 
     def get_bedrock_config(self) -> BedrockConfig:
         """Get Bedrock configuration."""
-        return BedrockConfig(region=self.aws_region)
+        return BedrockConfig(
+            model_id=self.bedrock_model_id,
+            region=self.aws_region
+        )
 
     def get_schedule_config(self) -> ScheduleConfig:
         """Get schedule configuration."""

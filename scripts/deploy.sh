@@ -65,11 +65,18 @@ OPTIONS:
     -t, --telegram-token TOKEN      Telegram bot token (required for initial deploy)
     -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
     -f, --feeds-file FILE           Path to feeds.json file (optional, uses default if not provided)
+    -m, --bedrock-model MODEL_ID    Bedrock model ID (default: amazon.nova-micro-v1:0)
     --bucket BUCKET_NAME            S3 bucket for artifacts (optional, auto-generated if not provided)
     --cleanup                       Delete all AWS resources created by this bot
     --update-code                   Update only the source code (trigger pipeline)
     --dry-run                       Show what would be deployed without executing
     -h, --help                      Show this help message
+
+PREREQUISITES:
+    - AWS CLI installed and configured with credentials
+    - AWS credentials configured (run 'aws configure' or set AWS_PROFILE)
+    - Python 3.12 or compatible
+    - zip command available
 
 EXAMPLES:
     # Initial deployment (creates pipeline with default feeds)
@@ -317,82 +324,43 @@ check_prerequisites() {
     
     print_success "All prerequisites satisfied"
 }
-check_prerequisites() {
-    print_header "Checking Prerequisites"
+
+# Function to validate Bedrock model
+validate_bedrock_model() {
+    local model_id="$1"
+    local region="$2"
     
-    local missing_deps=()
+    print_header "Validating Bedrock Model"
     
-    # Check AWS CLI
-    if ! command -v aws &> /dev/null; then
-        missing_deps+=("aws-cli")
-        print_error "AWS CLI not found. Please install AWS CLI."
+    print_status "Checking if model exists: $model_id"
+    
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_status "[DRY RUN] Would validate Bedrock model: $model_id"
+        return 0
+    fi
+    
+    # Try to list foundation models and check if our model exists
+    if aws bedrock list-foundation-models --region "$region" --query "modelSummaries[?modelId=='$model_id'].modelId" --output text 2>/dev/null | grep -q "$model_id"; then
+        print_success "Bedrock model validated: $model_id"
     else
-        print_success "AWS CLI found: $(aws --version)"
+        print_warning "Model $model_id not found in foundation models list"
+        print_status "Checking if it's an inference profile..."
         
-        # Check AWS credentials
-        if ! aws sts get-caller-identity &> /dev/null; then
-            print_error "AWS credentials not configured or invalid. Please run 'aws configure'."
+        # Check if it's a cross-region inference profile
+        if aws bedrock list-inference-profiles --region "$region" 2>/dev/null | grep -q "$model_id"; then
+            print_success "Bedrock inference profile validated: $model_id"
+        else
+            print_error "Bedrock model or inference profile not found: $model_id"
+            print_error "Please check:"
+            print_error "  1. Model ID is correct"
+            print_error "  2. Model is available in region: $region"
+            print_error "  3. You have access to the model"
+            print_error ""
+            print_error "To list available models, run:"
+            print_error "  aws bedrock list-foundation-models --region $region --query 'modelSummaries[].modelId'"
             exit 1
-        else
-            local aws_identity=$(aws sts get-caller-identity --output text --query 'Account')
-            print_success "AWS credentials configured (Account: $aws_identity)"
         fi
     fi
-    
-    # Check Python 3
-    if ! command -v python3 &> /dev/null; then
-        missing_deps+=("python3")
-        print_error "Python 3 not found. Please install Python 3.8 or later."
-    else
-        local python_version=$(python3 --version)
-        print_success "Python found: $python_version"
-        
-        # Check if pip is available
-        if ! python3 -m pip --version &> /dev/null; then
-            print_warning "pip not found. Will attempt to install dependencies without pip."
-        else
-            print_success "pip found: $(python3 -m pip --version)"
-        fi
-    fi
-    
-    # Check zip command
-    if ! command -v zip &> /dev/null; then
-        missing_deps+=("zip")
-        print_error "zip command not found. Please install zip utility."
-    else
-        print_success "zip command found: $(zip --version | head -n1)"
-    fi
-    
-    # Check if required files exist
-    if [[ ! -f "$TEMPLATE_FILE" ]]; then
-        print_error "CloudFormation template not found at: $TEMPLATE_FILE"
-        exit 1
-    else
-        print_success "CloudFormation template found"
-    fi
-    
-    if [[ ! -f "$REQUIREMENTS_FILE" ]]; then
-        print_error "Requirements file not found at: $REQUIREMENTS_FILE"
-        exit 1
-    else
-        print_success "Requirements file found"
-    fi
-    
-    if [[ ! -d "$SRC_DIR" ]]; then
-        print_error "Source directory not found at: $SRC_DIR"
-        exit 1
-    else
-        print_success "Source directory found"
-    fi
-    
-    # Exit if any dependencies are missing
-    if [[ ${#missing_deps[@]} -gt 0 ]]; then
-        print_error "Missing required dependencies: ${missing_deps[*]}"
-        print_error "Please install the missing dependencies and try again."
-        exit 1
-    fi
-    
-    print_success "All prerequisites satisfied"
 }
 
 # Function to create S3 bucket for artifacts (Requirements 2.3)
@@ -521,6 +489,7 @@ deploy_pipeline_stack() {
     local app_stack_name="$4"
     local telegram_token="$5"
     local chat_id="$6"
+    local bedrock_model="$7"
     
     print_header "Deploying Pipeline Stack"
     
@@ -530,6 +499,7 @@ deploy_pipeline_stack() {
         print_status "  BotName: $bot_name"
         print_status "  ApplicationStackName: $app_stack_name"
         print_status "  TelegramChatId: $chat_id"
+        print_status "  BedrockModelId: $bedrock_model"
         return 0
     fi
     
@@ -545,6 +515,7 @@ deploy_pipeline_stack() {
             "ApplicationStackName=$app_stack_name" \
             "TelegramBotToken=$telegram_token" \
             "TelegramChatId=$chat_id" \
+            "BedrockModelId=$bedrock_model" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$region" \
         --no-fail-on-empty-changeset
@@ -625,6 +596,7 @@ main() {
     local telegram_token=""
     local chat_id=""
     local feeds_file="$DEFAULT_FEEDS_FILE"
+    local bedrock_model="amazon.nova-micro-v1:0"
     local bucket_name=""
     local dry_run="false"
     local cleanup_mode="false"
@@ -659,6 +631,10 @@ main() {
                 ;;
             -f|--feeds-file)
                 feeds_file="$2"
+                shift 2
+                ;;
+            -m|--bedrock-model)
+                bedrock_model="$2"
                 shift 2
                 ;;
             --bucket)
@@ -763,6 +739,7 @@ main() {
     echo "Bot Name: $bot_name"
     echo "Chat ID: $chat_id"
     echo "Feeds File: $feeds_file"
+    echo "Bedrock Model: $bedrock_model"
     echo "S3 Bucket: $bucket_name"
     echo "Dry Run: $dry_run"
     
@@ -773,9 +750,10 @@ main() {
     
     # Execute deployment steps
     check_prerequisites
+    validate_bedrock_model "$bedrock_model" "$region"
     validate_feeds_file "$feeds_file"
     create_s3_bucket "$bucket_name" "$region"
-    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id"
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id" "$bedrock_model"
     create_source_package "$feeds_file"
     upload_source_and_trigger "$bucket_name" "$region"
     

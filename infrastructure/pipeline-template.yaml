@@ -20,6 +20,11 @@ Parameters:
   TelegramChatId:
     Type: String
     Description: 'Telegram chat ID'
+  
+  BedrockModelId:
+    Type: String
+    Default: 'amazon.nova-micro-v1:0'
+    Description: 'Amazon Bedrock model ID for summarization'
 
 Resources:
   # S3 Bucket for pipeline artifacts
@@ -140,7 +145,8 @@ Resources:
                     "TelegramChatId": "${TelegramChatId}",
                     "TelegramSecretName": "${BotName}-telegram-token",
                     "LambdaS3Bucket": "${ArtifactBucket}",
-                    "LambdaS3Key": "lambda-deployment-package.zip"
+                    "LambdaS3Key": "lambda-deployment-package.zip",
+                    "BedrockModelId": "${BedrockModelId}"
                   }
               InputArtifacts:
                 - Name: BuildOutput

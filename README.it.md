@@ -87,9 +87,17 @@ Vedi [FEEDS.IT.md](FEEDS.it.md) per istruzioni dettagliate ed esempi.
 
 ### Prerequisiti
 
-- AWS CLI configurato con credenziali appropriate
-- Python 3.12 o compatibile
-- Bot creato tramite @BotFather di Telegram
+- **Account AWS**: Account AWS attivo con permessi appropriati
+- **AWS CLI**: Installato e configurato con le tue credenziali
+  ```bash
+  # Configura AWS CLI con le tue credenziali
+  aws configure
+  # Oppure usa la variabile ambiente AWS_PROFILE
+  export AWS_PROFILE=nome-tuo-profilo
+  ```
+- **Python 3.12** o compatibile
+- **Bot creato** tramite @BotFather di Telegram
+- **Accesso Bedrock**: Assicurati di avere accesso ai modelli Amazon Bedrock nella tua regione
 
 ### Deployment
 

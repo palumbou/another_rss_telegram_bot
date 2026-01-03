@@ -43,6 +43,12 @@ Parameters:
     MinLength: 1
     ConstraintDescription: 'Must be a valid S3 key'
   
+  # Bedrock configuration
+  BedrockModelId:
+    Type: String
+    Default: 'amazon.nova-micro-v1:0'
+    Description: 'Amazon Bedrock model ID for AI summarization'
+  
   # Schedule configuration
   ScheduleExpression:
     Type: String
@@ -214,6 +220,7 @@ Resources:
           TELEGRAM_SECRET_NAME: !Ref TelegramSecretName
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
           DYNAMODB_TABLE: !Ref DeduplicationTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           CURRENT_AWS_REGION: !Ref AWS::Region
           LOG_LEVEL: INFO
       DeadLetterConfig:
