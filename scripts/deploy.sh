@@ -405,6 +405,7 @@ create_s3_bucket() {
     
     # Get AWS account ID for bucket policy
     local account_id=$(aws sts get-caller-identity --query Account --output text)
+    local bot_name_from_bucket=$(echo "$bucket_name" | cut -d'-' -f1-4)
     
     # Add bucket policy to allow CodePipeline and CodeBuild access
     print_status "Setting bucket policy for CodePipeline and CodeBuild access"
@@ -414,10 +415,10 @@ create_s3_bucket() {
             \"Version\": \"2012-10-17\",
             \"Statement\": [
                 {
-                    \"Sid\": \"AllowCodePipelineAccess\",
+                    \"Sid\": \"AllowCodePipelineServiceRole\",
                     \"Effect\": \"Allow\",
                     \"Principal\": {
-                        \"AWS\": \"arn:aws:iam::${account_id}:root\"
+                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name_from_bucket}-codepipeline-role\"
                     },
                     \"Action\": [
                         \"s3:GetObject\",
@@ -427,12 +428,40 @@ create_s3_bucket() {
                     \"Resource\": \"arn:aws:s3:::${bucket_name}/*\"
                 },
                 {
-                    \"Sid\": \"AllowCodePipelineList\",
+                    \"Sid\": \"AllowCodePipelineServiceRoleBucket\",
                     \"Effect\": \"Allow\",
                     \"Principal\": {
-                        \"AWS\": \"arn:aws:iam::${account_id}:root\"
+                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name_from_bucket}-codepipeline-role\"
                     },
-                    \"Action\": \"s3:ListBucket\",
+                    \"Action\": [
+                        \"s3:ListBucket\",
+                        \"s3:GetBucketVersioning\",
+                        \"s3:GetBucketLocation\"
+                    ],
+                    \"Resource\": \"arn:aws:s3:::${bucket_name}\"
+                },
+                {
+                    \"Sid\": \"AllowCodeBuildServiceRole\",
+                    \"Effect\": \"Allow\",
+                    \"Principal\": {
+                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name_from_bucket}-codebuild-role\"
+                    },
+                    \"Action\": [
+                        \"s3:GetObject\",
+                        \"s3:PutObject\"
+                    ],
+                    \"Resource\": \"arn:aws:s3:::${bucket_name}/*\"
+                },
+                {
+                    \"Sid\": \"AllowCodeBuildServiceRoleBucket\",
+                    \"Effect\": \"Allow\",
+                    \"Principal\": {
+                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name_from_bucket}-codebuild-role\"
+                    },
+                    \"Action\": [
+                        \"s3:ListBucket\",
+                        \"s3:GetBucketLocation\"
+                    ],
                     \"Resource\": \"arn:aws:s3:::${bucket_name}\"
                 }
             ]
