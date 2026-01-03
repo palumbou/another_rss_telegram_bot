@@ -301,20 +301,6 @@ check_prerequisites() {
         print_success "CloudFormation template found"
     fi
     
-    if [[ ! -f "$REQUIREMENTS_FILE" ]]; then
-        print_error "Requirements file not found at: $REQUIREMENTS_FILE"
-        exit 1
-    else
-        print_success "Requirements file found"
-    fi
-    
-    if [[ ! -d "$SRC_DIR" ]]; then
-        print_error "Source directory not found at: $SRC_DIR"
-        exit 1
-    else
-        print_success "Source directory found"
-    fi
-    
     # Exit if any dependencies are missing
     if [[ ${#missing_deps[@]} -gt 0 ]]; then
         print_error "Missing required dependencies: ${missing_deps[*]}"
