@@ -23,6 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 INFRASTRUCTURE_DIR="$PROJECT_ROOT/infrastructure"
 TEMPLATE_FILE="$INFRASTRUCTURE_DIR/pipeline-template.yaml"
+DEFAULT_FEEDS_FILE="$PROJECT_ROOT/feeds.json"
 
 # Deployment artifacts
 BUILD_DIR="$PROJECT_ROOT/build"
@@ -63,7 +64,7 @@ OPTIONS:
     -b, --bot-name BOT_NAME         Bot name for resource naming (default: $DEFAULT_BOT_NAME)
     -t, --telegram-token TOKEN      Telegram bot token (required for initial deploy)
     -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
-    -f, --feeds FEED_URLS           Comma-separated RSS feed URLs (optional, uses AWS defaults)
+    -f, --feeds-file FILE           Path to feeds.json file (optional, uses default if not provided)
     --bucket BUCKET_NAME            S3 bucket for artifacts (optional, auto-generated if not provided)
     --cleanup                       Delete all AWS resources created by this bot
     --update-code                   Update only the source code (trigger pipeline)
@@ -71,8 +72,12 @@ OPTIONS:
     -h, --help                      Show this help message
 
 EXAMPLES:
-    # Initial deployment (creates pipeline)
+    # Initial deployment (creates pipeline with default feeds)
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890"
+    
+    # Initial deployment with custom feeds file
+    $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
+       --feeds-file /path/to/my-feeds.json
     
     # Update code only (triggers pipeline)
     $0 --update-code
@@ -80,11 +85,24 @@ EXAMPLES:
     # Cleanup all resources
     $0 --cleanup --region "eu-west-1"
 
+FEEDS FILE FORMAT:
+    The feeds.json file should have this structure:
+    {
+      "feeds": [
+        {
+          "url": "https://example.com/feed.xml",
+          "name": "Example Feed",
+          "enabled": true
+        }
+      ]
+    }
+
 WORKFLOW:
     1. Initial deployment creates the CodePipeline infrastructure
-    2. Source code is packaged and uploaded to S3
-    3. Pipeline automatically builds and deploys the application
-    4. Subsequent updates only need --update-code flag
+    2. Feeds file is validated and included in source package
+    3. Source code is packaged and uploaded to S3
+    4. Pipeline automatically builds and deploys the application
+    5. Subsequent updates only need --update-code flag
 
 EOF
 }
@@ -183,6 +201,42 @@ cleanup_aws_resources() {
     fi
     
     print_success "Cleanup completed successfully!"
+}
+
+# Function to validate feeds file
+validate_feeds_file() {
+    local feeds_file="$1"
+    
+    print_header "Validating Feeds File"
+    
+    if [[ ! -f "$feeds_file" ]]; then
+        print_error "Feeds file not found: $feeds_file"
+        exit 1
+    fi
+    
+    print_status "Checking feeds file: $feeds_file"
+    
+    # Validate JSON syntax
+    if ! python3 -c "import json; json.load(open('$feeds_file'))" 2>/dev/null; then
+        print_error "Invalid JSON in feeds file: $feeds_file"
+        exit 1
+    fi
+    
+    # Validate structure
+    local has_feeds=$(python3 -c "import json; data=json.load(open('$feeds_file')); print('feeds' in data)" 2>/dev/null)
+    if [[ "$has_feeds" != "True" ]]; then
+        print_error "Feeds file must contain a 'feeds' array"
+        exit 1
+    fi
+    
+    # Count enabled feeds
+    local feed_count=$(python3 -c "import json; data=json.load(open('$feeds_file')); print(len([f for f in data['feeds'] if f.get('enabled', True)]))" 2>/dev/null)
+    
+    if [[ "$feed_count" -eq 0 ]]; then
+        print_warning "No enabled feeds found in feeds file"
+    else
+        print_success "Feeds file validated: $feed_count enabled feed(s)"
+    fi
 }
 
 # Function to check prerequisites (Requirements 2.1)
@@ -400,6 +454,8 @@ create_s3_bucket() {
 
 # Function to create source package
 create_source_package() {
+    local feeds_file="$1"
+    
     print_header "Creating Source Package"
     
     print_status "Preparing build directory"
@@ -408,13 +464,14 @@ create_source_package() {
     
     if [[ "$DRY_RUN" == "true" ]]; then
         print_status "[DRY RUN] Would create source package: $SOURCE_ZIP"
+        print_status "[DRY RUN] Would include feeds file: $feeds_file"
         return 0
     fi
     
     print_status "Creating source archive"
     cd "$PROJECT_ROOT"
     
-    # Create zip with all source files
+    # Create zip with all source files including feeds
     zip -r "$SOURCE_ZIP" \
         src/ \
         infrastructure/ \
@@ -422,6 +479,10 @@ create_source_package() {
         buildspec.yml \
         -x "*.pyc" "*__pycache__*" "*.git*" \
         -q
+    
+    # Add feeds file to the zip
+    print_status "Adding feeds file to package"
+    zip -j "$SOURCE_ZIP" "$feeds_file" -q
     
     local zip_size=$(du -h "$SOURCE_ZIP" | cut -f1)
     print_success "Source package created: $SOURCE_ZIP ($zip_size)"
@@ -459,7 +520,6 @@ deploy_pipeline_stack() {
     local app_stack_name="$4"
     local telegram_token="$5"
     local chat_id="$6"
-    local feed_urls="$7"
     
     print_header "Deploying Pipeline Stack"
     
@@ -469,7 +529,6 @@ deploy_pipeline_stack() {
         print_status "  BotName: $bot_name"
         print_status "  ApplicationStackName: $app_stack_name"
         print_status "  TelegramChatId: $chat_id"
-        print_status "  RSSFeedUrls: $feed_urls"
         return 0
     fi
     
@@ -485,7 +544,6 @@ deploy_pipeline_stack() {
             "ApplicationStackName=$app_stack_name" \
             "TelegramBotToken=$telegram_token" \
             "TelegramChatId=$chat_id" \
-            "RSSFeedUrls=$feed_urls" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$region" \
         --no-fail-on-empty-changeset
@@ -565,7 +623,7 @@ main() {
     local bot_name="$DEFAULT_BOT_NAME"
     local telegram_token=""
     local chat_id=""
-    local feed_urls="https://aws.amazon.com/blogs/aws/feed/,https://aws.amazon.com/about-aws/whats-new/recent/feed/,https://aws.amazon.com/blogs/security/feed/,https://aws.amazon.com/blogs/compute/feed/,https://aws.amazon.com/blogs/database/feed/"
+    local feeds_file="$DEFAULT_FEEDS_FILE"
     local bucket_name=""
     local dry_run="false"
     local cleanup_mode="false"
@@ -598,8 +656,8 @@ main() {
                 chat_id="$2"
                 shift 2
                 ;;
-            -f|--feeds)
-                feed_urls="$2"
+            -f|--feeds-file)
+                feeds_file="$2"
                 shift 2
                 ;;
             --bucket)
@@ -674,7 +732,8 @@ main() {
         print_status "Using existing bucket: $bucket_name"
         
         check_prerequisites
-        create_source_package
+        validate_feeds_file "$feeds_file"
+        create_source_package "$feeds_file"
         upload_source_and_trigger "$bucket_name" "$region"
         
         print_success "Code updated! Pipeline will deploy automatically."
@@ -702,7 +761,7 @@ main() {
     echo "Region: $region"
     echo "Bot Name: $bot_name"
     echo "Chat ID: $chat_id"
-    echo "Feed URLs: $feed_urls"
+    echo "Feeds File: $feeds_file"
     echo "S3 Bucket: $bucket_name"
     echo "Dry Run: $dry_run"
     
@@ -713,9 +772,10 @@ main() {
     
     # Execute deployment steps
     check_prerequisites
+    validate_feeds_file "$feeds_file"
     create_s3_bucket "$bucket_name" "$region"
-    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id" "$feed_urls"
-    create_source_package
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id"
+    create_source_package "$feeds_file"
     upload_source_and_trigger "$bucket_name" "$region"
     
     print_success "Initial deployment completed!"

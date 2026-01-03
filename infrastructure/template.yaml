@@ -10,12 +10,6 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
   
-  # Feed configuration
-  RSSFeedUrls:
-    Type: CommaDelimitedList
-    Default: 'https://aws.amazon.com/blogs/aws/feed/,https://aws.amazon.com/about-aws/whats-new/recent/feed/,https://aws.amazon.com/blogs/security/feed/,https://aws.amazon.com/blogs/compute/feed/,https://aws.amazon.com/blogs/database/feed/'
-    Description: 'Comma-separated list of RSS feed URLs to process'
-  
   # Telegram configuration
   TelegramChatId:
     Type: String
@@ -220,7 +214,6 @@ Resources:
           TELEGRAM_SECRET_NAME: !Ref TelegramSecretName
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
           DYNAMODB_TABLE: !Ref DeduplicationTable
-          RSS_FEED_URLS: !Join [',', !Ref RSSFeedUrls]
           CURRENT_AWS_REGION: !Ref AWS::Region
           LOG_LEVEL: INFO
       DeadLetterConfig:
@@ -407,10 +400,6 @@ Outputs:
     Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${BotName}-monitoring'
   
   # Configuration information
-  ConfiguredFeeds:
-    Description: 'RSS feeds configured for processing'
-    Value: !Join [', ', !Ref RSSFeedUrls]
-  
   TelegramChatId:
     Description: 'Telegram chat ID where messages are sent'
     Value: !Ref TelegramChatId

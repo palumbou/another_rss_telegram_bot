@@ -1,0 +1,29 @@
+{
+  "feeds": [
+    {
+      "url": "https://aws.amazon.com/blogs/aws/feed/",
+      "name": "AWS Blog",
+      "enabled": true
+    },
+    {
+      "url": "https://aws.amazon.com/about-aws/whats-new/recent/feed/",
+      "name": "AWS What's New",
+      "enabled": true
+    },
+    {
+      "url": "https://aws.amazon.com/blogs/security/feed/",
+      "name": "AWS Security Blog",
+      "enabled": true
+    },
+    {
+      "url": "https://aws.amazon.com/blogs/compute/feed/",
+      "name": "AWS Compute Blog",
+      "enabled": true
+    },
+    {
+      "url": "https://aws.amazon.com/blogs/database/feed/",
+      "name": "AWS Database Blog",
+      "enabled": true
+    }
+  ]
+}

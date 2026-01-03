@@ -1,7 +1,9 @@
 """Configuration management for RSS Telegram Bot."""
 
+import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -36,14 +38,8 @@ class ScheduleConfig:
 class Config:
     """Main configuration manager."""
 
-    # Default AWS feeds
-    DEFAULT_AWS_FEEDS = [
-        "https://aws.amazon.com/blogs/aws/feed/",
-        "https://aws.amazon.com/about-aws/whats-new/recent/feed/",
-        "https://aws.amazon.com/blogs/security/feed/",
-        "https://aws.amazon.com/blogs/compute/feed/",
-        "https://aws.amazon.com/blogs/database/feed/",
-    ]
+    # Default feeds file path
+    FEEDS_FILE = "feeds.json"
 
     def __init__(self):
         """Initialize configuration from environment variables."""
@@ -55,11 +51,36 @@ class Config:
         self.aws_region = os.getenv("CURRENT_AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
 
     def get_feed_urls(self) -> list[str]:
-        """Get RSS feed URLs from environment or use defaults."""
-        feed_urls_env = os.getenv("RSS_FEED_URLS", "")
-        if feed_urls_env:
-            return [url.strip() for url in feed_urls_env.split(",") if url.strip()]
-        return self.DEFAULT_AWS_FEEDS
+        """Get RSS feed URLs from feeds.json file."""
+        # Try to find feeds.json in current directory or Lambda root
+        feeds_file = Path(self.FEEDS_FILE)
+        if not feeds_file.exists():
+            # Try in Lambda root directory
+            feeds_file = Path("/var/task") / self.FEEDS_FILE
+        
+        if not feeds_file.exists():
+            raise FileNotFoundError(f"Feeds file not found: {self.FEEDS_FILE}")
+        
+        try:
+            with open(feeds_file, "r") as f:
+                data = json.load(f)
+            
+            # Extract enabled feeds
+            feeds = data.get("feeds", [])
+            enabled_urls = [
+                feed["url"]
+                for feed in feeds
+                if feed.get("enabled", True) and "url" in feed
+            ]
+            
+            if not enabled_urls:
+                raise ValueError("No enabled feeds found in feeds.json")
+            
+            return enabled_urls
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in feeds file: {e}")
+        except Exception as e:
+            raise ValueError(f"Error reading feeds file: {e}")
 
     def get_telegram_config(self) -> TelegramConfig:
         """Get Telegram configuration."""

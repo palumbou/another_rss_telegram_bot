@@ -20,11 +20,6 @@ Parameters:
   TelegramChatId:
     Type: String
     Description: 'Telegram chat ID'
-  
-  RSSFeedUrls:
-    Type: CommaDelimitedList
-    Default: 'https://aws.amazon.com/blogs/aws/feed/,https://aws.amazon.com/about-aws/whats-new/recent/feed/'
-    Description: 'Comma-separated list of RSS feed URLs'
 
 Resources:
   # S3 Bucket for pipeline artifacts
@@ -145,8 +140,7 @@ Resources:
                     "TelegramChatId": "${TelegramChatId}",
                     "TelegramSecretName": "${BotName}-telegram-token",
                     "LambdaS3Bucket": "${ArtifactBucket}",
-                    "LambdaS3Key": "lambda-deployment-package.zip",
-                    "RSSFeedUrls": "${RSSFeedUrls}"
+                    "LambdaS3Key": "lambda-deployment-package.zip"
                   }
               InputArtifacts:
                 - Name: BuildOutput
