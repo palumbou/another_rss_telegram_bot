@@ -32,35 +32,8 @@ Parameters:
 
 Resources:
   # S3 Bucket for pipeline artifacts
-  ArtifactBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref ArtifactBucketName
-      VersioningConfiguration:
-        Status: Enabled
-      NotificationConfiguration:
-        EventBridgeConfiguration:
-          EventBridgeEnabled: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldArtifacts
-            Status: Enabled
-            ExpirationInDays: 30
-            NoncurrentVersionExpirationInDays: 7
-      Tags:
-        - Key: Application
-          Value: !Ref BotName
-        - Key: Component
-          Value: Pipeline
+  # Note: Bucket name is passed as parameter and created externally before stack deployment
+  # This avoids circular dependency issues with CloudFormation early validation
 
   # CodeBuild Project
   BuildProject:
@@ -77,14 +50,14 @@ Resources:
         Image: aws/codebuild/standard:7.0
         EnvironmentVariables:
           - Name: ARTIFACT_BUCKET
-            Value: !Ref ArtifactBucket
+            Value: !Ref ArtifactBucketName
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec.yml
       TimeoutInMinutes: 15
       Cache:
         Type: S3
-        Location: !Sub '${ArtifactBucket}/build-cache'
+        Location: !Sub '${ArtifactBucketName}/build-cache'
       Tags:
         - Key: Application
           Value: !Ref BotName
@@ -99,7 +72,7 @@ Resources:
       RoleArn: !GetAtt CodePipelineRole.Arn
       ArtifactStore:
         Type: S3
-        Location: !Ref ArtifactBucket
+        Location: !Ref ArtifactBucketName
       Stages:
         - Name: Source
           Actions:
@@ -110,7 +83,7 @@ Resources:
                 Provider: S3
                 Version: '1'
               Configuration:
-                S3Bucket: !Ref ArtifactBucket
+                S3Bucket: !Ref ArtifactBucketName
                 S3ObjectKey: source/source.zip
                 PollForSourceChanges: false
               OutputArtifacts:
@@ -151,7 +124,7 @@ Resources:
                     "TelegramBotToken": "${TelegramBotToken}",
                     "TelegramChatId": "${TelegramChatId}",
                     "TelegramSecretName": "${BotName}-telegram-token",
-                    "LambdaS3Bucket": "${ArtifactBucket}",
+                    "LambdaS3Bucket": "${ArtifactBucketName}",
                     "LambdaS3Key": "lambda-deployment-package.zip",
                     "BedrockModelId": "${BedrockModelId}"
                   }
@@ -245,12 +218,12 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource:
-                  - !Sub '${ArtifactBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
                 Resource:
-                  - !GetAtt ArtifactBucket.Arn
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
 
   # IAM Role for CodePipeline
   CodePipelineRole:
@@ -275,12 +248,12 @@ Resources:
                   - s3:PutObject
                   - s3:GetObjectVersion
                 Resource:
-                  - !Sub '${ArtifactBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
                 Resource:
-                  - !GetAtt ArtifactBucket.Arn
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
               - Effect: Allow
                 Action:
                   - codebuild:BatchGetBuilds
@@ -360,7 +333,7 @@ Outputs:
   
   ArtifactBucketName:
     Description: 'Name of the S3 artifact bucket'
-    Value: !Ref ArtifactBucket
+    Value: !Ref ArtifactBucketName
     Export:
       Name: !Sub '${AWS::StackName}-ArtifactBucket'
   

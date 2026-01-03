@@ -447,6 +447,7 @@ create_source_package() {
 upload_source_and_trigger() {
     local bucket_name="$1"
     local region="$2"
+    local pipeline_name="$3"
     
     local s3_key="source/source.zip"
     local s3_uri="s3://$bucket_name/$s3_key"
@@ -454,7 +455,7 @@ upload_source_and_trigger() {
     if [[ "$DRY_RUN" == "true" ]]; then
         print_header "Uploading Source to S3"
         print_status "[DRY RUN] Would upload source to: $s3_uri"
-        print_status "[DRY RUN] This would trigger the CodePipeline automatically"
+        print_status "[DRY RUN] Would trigger pipeline: $pipeline_name"
         return 0
     fi
     
@@ -464,7 +465,15 @@ upload_source_and_trigger() {
     aws s3 cp "$SOURCE_ZIP" "$s3_uri" --region "$region"
     
     print_success "Source uploaded successfully"
-    print_status "CodePipeline will be triggered automatically by S3 event"
+    
+    # Trigger pipeline manually since EventBridge auto-trigger is disabled
+    print_status "Triggering CodePipeline manually..."
+    aws codepipeline start-pipeline-execution \
+        --name "$pipeline_name" \
+        --region "$region" \
+        --output json > /dev/null
+    
+    print_success "Pipeline execution started"
 }
 
 # Function to deploy pipeline stack
@@ -741,10 +750,17 @@ main() {
     check_prerequisites
     validate_bedrock_model "$bedrock_model" "$region"
     validate_feeds_file "$feeds_file"
+    
+    # Create S3 bucket BEFORE deploying pipeline stack
+    # This ensures the bucket exists when CloudFormation validates the template
     create_s3_bucket "$bucket_name" "$region"
+    
     deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id" "$bedrock_model" "$bucket_name"
     create_source_package "$feeds_file"
-    upload_source_and_trigger "$bucket_name" "$region"
+    
+    # Get the pipeline name from the stack
+    local pipeline_name="$bot_name-pipeline"
+    upload_source_and_trigger "$bucket_name" "$region" "$pipeline_name"
     
     print_success "Initial deployment completed!"
     print_status "Pipeline will now build and deploy the application automatically."
