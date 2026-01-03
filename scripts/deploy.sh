@@ -403,6 +403,41 @@ create_s3_bucket() {
             ]
         }'
     
+    # Get AWS account ID for bucket policy
+    local account_id=$(aws sts get-caller-identity --query Account --output text)
+    
+    # Add bucket policy to allow CodePipeline and CodeBuild access
+    print_status "Setting bucket policy for CodePipeline and CodeBuild access"
+    aws s3api put-bucket-policy \
+        --bucket "$bucket_name" \
+        --policy "{
+            \"Version\": \"2012-10-17\",
+            \"Statement\": [
+                {
+                    \"Sid\": \"AllowCodePipelineAccess\",
+                    \"Effect\": \"Allow\",
+                    \"Principal\": {
+                        \"AWS\": \"arn:aws:iam::${account_id}:root\"
+                    },
+                    \"Action\": [
+                        \"s3:GetObject\",
+                        \"s3:GetObjectVersion\",
+                        \"s3:PutObject\"
+                    ],
+                    \"Resource\": \"arn:aws:s3:::${bucket_name}/*\"
+                },
+                {
+                    \"Sid\": \"AllowCodePipelineList\",
+                    \"Effect\": \"Allow\",
+                    \"Principal\": {
+                        \"AWS\": \"arn:aws:iam::${account_id}:root\"
+                    },
+                    \"Action\": \"s3:ListBucket\",
+                    \"Resource\": \"arn:aws:s3:::${bucket_name}\"
+                }
+            ]
+        }"
+    
     print_success "S3 bucket '$bucket_name' created successfully"
 }
 
@@ -426,13 +461,18 @@ create_source_package() {
     cd "$PROJECT_ROOT"
     
     # Create zip with all source files including feeds and prompts
+    # Exclude README files from prompts as they're only documentation
     zip -r "$SOURCE_ZIP" \
         src/ \
-        prompts/ \
         infrastructure/ \
         requirements.txt \
         buildspec.yml \
         -x "*.pyc" "*__pycache__*" "*.git*" \
+        -q
+    
+    # Add prompts directory but exclude README files
+    zip -r "$SOURCE_ZIP" prompts/ \
+        -x "prompts/README.md" "prompts/README.it.md" \
         -q
     
     # Add feeds file to the zip
