@@ -233,8 +233,8 @@ RIASSUNTO:"""
         while len(bullets) < 3:
             bullets.append("Informazioni aggiuntive nell'articolo completo...")
 
-        # Simple generic why it matters for fallback
-        why_it_matters = "Aggiornamento rilevante che potrebbe interessare il settore"
+        # Create more specific why it matters based on content (FALLBACK only)
+        why_it_matters = self._generate_why_it_matters(text)
 
         # Format as expected by format_summary
         formatted_text = f"{title}\n"
@@ -243,6 +243,30 @@ RIASSUNTO:"""
         formatted_text += f"Perché ti può interessare: {why_it_matters}\n\nFonte: {url}"
 
         return formatted_text
+
+    def _generate_why_it_matters(self, content: str) -> str:
+        """Generate a more specific 'why it matters' based on content keywords."""
+        content_lower = content.lower()
+        
+        # Technology keywords
+        if any(word in content_lower for word in ['ai', 'artificial intelligence', 'machine learning', 'ml']):
+            return "Aggiornamenti sull'intelligenza artificiale che potrebbero influenzare il tuo lavoro"
+        elif any(word in content_lower for word in ['security', 'sicurezza', 'vulnerability', 'breach']):
+            return "Informazioni di sicurezza importanti per proteggere i tuoi sistemi"
+        elif any(word in content_lower for word in ['aws', 'cloud', 'serverless', 'lambda']):
+            return "Novità cloud che potrebbero ottimizzare la tua infrastruttura"
+        elif any(word in content_lower for word in ['github', 'git', 'repository', 'open source']):
+            return "Sviluppi nel mondo open source che potrebbero interessare i developer"
+        elif any(word in content_lower for word in ['performance', 'optimization', 'speed', 'faster']):
+            return "Miglioramenti delle prestazioni che potrebbero accelerare i tuoi progetti"
+        elif any(word in content_lower for word in ['cost', 'pricing', 'save', 'budget']):
+            return "Informazioni sui costi che potrebbero far risparmiare la tua azienda"
+        elif any(word in content_lower for word in ['new', 'launch', 'announce', 'release']):
+            return "Nuovi strumenti o servizi che potrebbero essere utili per il tuo lavoro"
+        elif any(word in content_lower for word in ['update', 'version', 'feature']):
+            return "Aggiornamenti che potrebbero migliorare i tuoi flussi di lavoro"
+        else:
+            return "Sviluppi tecnologici che potrebbero impattare il settore"
 
     def format_summary(self, raw_summary: str) -> Summary:
         """Parse and format raw summary text into Summary object."""
