@@ -2,6 +2,7 @@
 
 import json
 import re
+from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -14,11 +15,14 @@ from .models import FeedItem, Summary
 class Summarizer:
     """Summarizer that uses Amazon Bedrock with extractive fallback."""
 
+    TEMPLATE_FILE = "prompts/bedrock_summary_template.txt"
+
     def __init__(self, config: BedrockConfig, execution_id: str | None = None):
         """Initialize the summarizer with Bedrock configuration."""
         self.config = config
         self.logger = create_execution_logger("summarizer", execution_id)
         self.bedrock_client = None
+        self.prompt_template = self._load_prompt_template()
         self._initialize_bedrock_client()
 
     def _initialize_bedrock_client(self) -> None:
@@ -34,16 +38,62 @@ class Summarizer:
             )
             self.bedrock_client = None
 
+    def _load_prompt_template(self) -> str:
+        """Load prompt template from file."""
+        # Try to find template in current directory or Lambda root
+        template_file = Path(self.TEMPLATE_FILE)
+        if not template_file.exists():
+            # Try in Lambda root directory
+            template_file = Path("/var/task") / self.TEMPLATE_FILE
+        
+        if template_file.exists():
+            try:
+                with open(template_file, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception as e:
+                self.logger.warning(f"Failed to load template file: {e}")
+        
+        # Fallback to default template
+        return """Riassumi questo articolo in italiano seguendo ESATTAMENTE questo formato:
+
+FORMATO RICHIESTO:
+- Una riga di titolo (massimo 10 parole, senza prefissi come "Titolo:")
+- Tre punti elenco, ciascuno massimo 30 parole
+- Una riga finale "Perché ti può interessare:" seguita da massimo 20 parole
+- Alla fine inserisci la fonte
+
+ARTICOLO DA RIASSUMERE:
+{content}
+
+URL ARTICOLO:
+{url}
+
+RIASSUNTO:"""
+
     def summarize(self, item: FeedItem) -> Summary:
-        """Generate summary for a feed item using enhanced fallback (Bedrock disabled)."""
+        """Generate summary for a feed item using Bedrock with fallback."""
         self.logger.info("Starting summarization", item_title=item.title)
 
         try:
-            # Skip Bedrock and go directly to enhanced fallback
+            # Try Bedrock first
+            if self.bedrock_client:
+                self.logger.info("Attempting Bedrock summarization", item_title=item.title)
+                summary_text = self.bedrock_summarize(item.content, item.link)
+                
+                if summary_text:
+                    summary = self.format_summary(summary_text)
+                    self.logger.info(
+                        "Successfully generated Bedrock summary",
+                        item_title=item.title,
+                        summary_method="bedrock",
+                    )
+                    return summary
+            
+            # Fallback to extractive summarization
             self.logger.info(
                 "Using enhanced fallback summarization", item_title=item.title
             )
-            summary_text = self.fallback_summarize(item.content)
+            summary_text = self.fallback_summarize(item.content, item.link)
             summary = self.format_summary(summary_text)
             self.logger.info(
                 "Successfully generated fallback summary",
@@ -67,28 +117,14 @@ class Summarizer:
                 why_it_matters="Informazioni importanti disponibili nell'articolo completo",
             )
 
-    def bedrock_summarize(self, content: str) -> str | None:
+    def bedrock_summarize(self, content: str, url: str) -> str | None:
         """Generate summary using Meta Llama 3.2 1B Instruct via inference profile."""
         if not self.bedrock_client:
             self.logger.warning("Bedrock client not available")
             return None
 
-        # Italian prompt template for Llama
-        prompt = f"""Riassumi questo articolo in italiano seguendo ESATTAMENTE questo formato:
-
-TITOLO (massimo 10 parole)
-• Primo punto chiave (massimo 15 parole)
-• Secondo punto importante (massimo 15 parole)  
-• Terzo aspetto rilevante (massimo 15 parole)
-Perché conta: [Spiega in massimo 20 parole perché questo articolo è importante per il lettore, evita frasi generiche]
-
-Articolo: {content}
-
-IMPORTANTE: 
-- Scrivi TUTTO in italiano
-- Spiega nel "Perché conta" il valore specifico di QUESTO articolo
-- Non usare frasi generiche come "contiene informazioni rilevanti"
-- Concentrati sui benefici concreti per il lettore"""
+        # Use template and substitute content and URL
+        prompt = self.prompt_template.format(content=content, url=url)
 
         try:
             self.logger.debug(
@@ -149,21 +185,21 @@ IMPORTANTE:
             self.logger.error(f"Unexpected error calling Bedrock: {e}", error=str(e))
             return None
 
-    def fallback_summarize(self, content: str) -> str:
+    def fallback_summarize(self, content: str, url: str) -> str:
         """Generate extractive summary without external dependencies."""
         # Clean and prepare text
         text = re.sub(r"<[^>]+>", "", content)  # Remove HTML tags
         text = re.sub(r"\s+", " ", text).strip()  # Normalize whitespace
 
         if not text:
-            return "Contenuto non disponibile\\n• Articolo vuoto o non leggibile\\n• Consultare il link originale\\n• Informazioni potrebbero essere disponibili online\\nPerché conta: Il contenuto potrebbe contenere informazioni rilevanti"
+            return f"Contenuto non disponibile\n• Articolo vuoto o non leggibile\n• Consultare il link originale\n• Informazioni potrebbero essere disponibili online\nPerché ti può interessare: Il contenuto potrebbe contenere informazioni rilevanti\n\nFonte: {url}"
 
         # Split into sentences
         sentences = re.split(r"[.!?]+", text)
         sentences = [s.strip() for s in sentences if len(s.strip()) > 20]
 
         if not sentences:
-            return "Contenuto breve disponibile\\n• Testo troppo breve per il riassunto\\n• Consultare l'articolo completo\\n• Dettagli nel link originale\\nPerché conta: Informazioni aggiuntive potrebbero essere importanti"
+            return f"Contenuto breve disponibile\n• Testo troppo breve per il riassunto\n• Consultare l'articolo completo\n• Dettagli nel link originale\nPerché ti può interessare: Informazioni aggiuntive potrebbero essere importanti\n\nFonte: {url}"
 
         # Simple sentence ranking by length and position
         scored_sentences = []
@@ -184,10 +220,10 @@ IMPORTANTE:
         )
         title = " ".join(title_words)
 
-        # Create bullet points (max 15 words each)
+        # Create bullet points (max 30 words each)
         bullets = []
         for sentence in top_sentences:
-            words = sentence.split()[:15]
+            words = sentence.split()[:30]
             bullet = " ".join(words)
             if not bullet.endswith("."):
                 bullet += "..."
@@ -197,44 +233,20 @@ IMPORTANTE:
         while len(bullets) < 3:
             bullets.append("Informazioni aggiuntive nell'articolo completo...")
 
-        # Create more specific why it matters based on content
-        why_it_matters = self._generate_why_it_matters(text)
+        # Simple generic why it matters for fallback
+        why_it_matters = "Aggiornamento rilevante che potrebbe interessare il settore"
 
         # Format as expected by format_summary
-        formatted_text = f"{title}\\n"
+        formatted_text = f"{title}\n"
         for bullet in bullets[:3]:
-            formatted_text += f"• {bullet}\\n"
-        formatted_text += f"Perché conta: {why_it_matters}"
+            formatted_text += f"• {bullet}\n"
+        formatted_text += f"Perché ti può interessare: {why_it_matters}\n\nFonte: {url}"
 
         return formatted_text
 
-    def _generate_why_it_matters(self, content: str) -> str:
-        """Generate a more specific 'why it matters' based on content keywords."""
-        content_lower = content.lower()
-        
-        # Technology keywords
-        if any(word in content_lower for word in ['ai', 'artificial intelligence', 'machine learning', 'ml']):
-            return "Aggiornamenti sull'intelligenza artificiale che potrebbero influenzare il tuo lavoro"
-        elif any(word in content_lower for word in ['security', 'sicurezza', 'vulnerability', 'breach']):
-            return "Informazioni di sicurezza importanti per proteggere i tuoi sistemi"
-        elif any(word in content_lower for word in ['aws', 'cloud', 'serverless', 'lambda']):
-            return "Novità cloud che potrebbero ottimizzare la tua infrastruttura"
-        elif any(word in content_lower for word in ['github', 'git', 'repository', 'open source']):
-            return "Sviluppi nel mondo open source che potrebbero interessare i developer"
-        elif any(word in content_lower for word in ['performance', 'optimization', 'speed', 'faster']):
-            return "Miglioramenti delle prestazioni che potrebbero accelerare i tuoi progetti"
-        elif any(word in content_lower for word in ['cost', 'pricing', 'save', 'budget']):
-            return "Informazioni sui costi che potrebbero far risparmiare la tua azienda"
-        elif any(word in content_lower for word in ['new', 'launch', 'announce', 'release']):
-            return "Nuovi strumenti o servizi che potrebbero essere utili per il tuo lavoro"
-        elif any(word in content_lower for word in ['update', 'version', 'feature']):
-            return "Aggiornamenti che potrebbero migliorare i tuoi flussi di lavoro"
-        else:
-            return "Sviluppi tecnologici che potrebbero impattare il settore"
-
     def format_summary(self, raw_summary: str) -> Summary:
         """Parse and format raw summary text into Summary object."""
-        lines = [line.strip() for line in raw_summary.split("\\n") if line.strip()]
+        lines = [line.strip() for line in raw_summary.split("\n") if line.strip()]
 
         if not lines:
             return Summary(
@@ -250,22 +262,28 @@ IMPORTANTE:
         # Extract title (first line)
         title = lines[0]
         # Remove common prefixes
-        title = re.sub(r"^(Titolo:|Title:)\\s*", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"^(Titolo:|Title:)\s*", "", title, flags=re.IGNORECASE)
 
         # Extract bullets (lines starting with • or -)
         bullets = []
         why_it_matters = ""
+        source = ""
 
         for line in lines[1:]:
             if line.startswith("•") or line.startswith("-"):
                 bullet = line[1:].strip()
                 if bullet:
                     bullets.append(bullet)
-            elif line.lower().startswith("perché conta:") or line.lower().startswith(
-                "why it matters:"
-            ):
+            elif line.lower().startswith("perché ti può interessare:") or line.lower().startswith("perché conta:") or line.lower().startswith("why it matters:"):
                 why_it_matters = re.sub(
-                    r"^(perché conta:|why it matters:)\\s*",
+                    r"^(perché ti può interessare:|perché conta:|why it matters:)\s*",
+                    "",
+                    line,
+                    flags=re.IGNORECASE,
+                )
+            elif line.lower().startswith("fonte:") or line.lower().startswith("source:"):
+                source = re.sub(
+                    r"^(fonte:|source:)\s*",
                     "",
                     line,
                     flags=re.IGNORECASE,
@@ -284,9 +302,13 @@ IMPORTANTE:
         title_words = title.split()[:10]
         title = " ".join(title_words)
 
-        bullets = [" ".join(bullet.split()[:15]) for bullet in bullets]
+        bullets = [" ".join(bullet.split()[:30]) for bullet in bullets]
 
         why_it_matters_words = why_it_matters.split()[:20]
         why_it_matters = " ".join(why_it_matters_words)
+        
+        # Add source to why_it_matters if present
+        if source:
+            why_it_matters = f"{why_it_matters}\n\nFonte: {source}"
 
         return Summary(title=title, bullets=bullets, why_it_matters=why_it_matters)

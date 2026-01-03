@@ -57,9 +57,18 @@ Il sistema utilizza AWS CodePipeline per il deployment automatizzato. Vedi [docs
 
 ## Configurazione
 
+### Feed RSS
+
+Il bot legge i feed RSS da un file `feeds.json`. Puoi personalizzare quali feed monitorare modificando questo file o fornendo il tuo.
+
+**I feed predefiniti** includono contenuti relativi ad AWS. Vedi [FEEDS.IT.md](FEEDS.IT.md) per la documentazione completa su:
+- Formato del file feed
+- Come personalizzare i feed
+- Esempi per diversi casi d'uso
+
 ### Feed RSS Predefiniti
 
-Il sistema include questi feed AWS per default:
+Il `feeds.json` predefinito include questi feed AWS:
 - AWS Blog: `https://aws.amazon.com/blogs/aws/feed/`
 - AWS What's New: `https://aws.amazon.com/about-aws/whats-new/recent/feed/`
 - AWS Security Blog: `https://aws.amazon.com/blogs/security/feed/`
@@ -68,13 +77,44 @@ Il sistema include questi feed AWS per default:
 
 ### Personalizzazione
 
-Puoi sostituire completamente i feed usando i parametri CloudFormation. Vedi la documentazione per i dettagli.
+Puoi personalizzare i feed:
+1. Modificando il file `feeds.json` nella root del progetto
+2. Fornendo un file feeds personalizzato durante il deployment
+
+Vedi [FEEDS.IT.md](FEEDS.it.md) per istruzioni dettagliate ed esempi.
+
+## Avvio Rapido
+
+### Prerequisiti
+
+- AWS CLI configurato con credenziali appropriate
+- Python 3.12 o compatibile
+- Bot creato tramite @BotFather di Telegram
+
+### Deployment
+
+```bash
+# Deployment iniziale con feed predefiniti
+./scripts/deploy.sh \
+  --telegram-token "TUO_BOT_TOKEN" \
+  --chat-id "TUO_CHAT_ID"
+
+# Oppure con file feeds personalizzato
+./scripts/deploy.sh \
+  --telegram-token "TUO_BOT_TOKEN" \
+  --chat-id "TUO_CHAT_ID" \
+  --feeds-file /percorso/al/mio-feeds.json
+```
+
+Per istruzioni complete di deployment, vedi [docs/INFRASTRUCTURE.it.md](docs/INFRASTRUCTURE.IT.md).
 
 ## Documentazione
 
-- [Guida Infrastruttura](docs/infrastructure.it.md) - Setup completo dell'infrastruttura
+- [Configurazione Feed RSS](FEEDS.it.md) - Come configurare e personalizzare i feed RSS
+- [Guida Infrastruttura](docs/INFRASTRUCTURE.it.md) - Setup completo dell'infrastruttura
 - [Processo di Sviluppo Kiro](docs/kiro-prompt.md) - Metodologia di sviluppo assistito da AI
-- [Prompts](prompts/README.md) - Template dei prompt AI
+- [Prompts](prompts/README.it.md) - Template dei prompt AI
+- [Script di Deployment](scripts/README.it.md) - Documentazione automazione deployment
 
 ## Metodologia di Sviluppo
 

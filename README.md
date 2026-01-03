@@ -57,9 +57,18 @@ The system uses AWS CodePipeline for automated deployment. See [docs/INFRASTRUCT
 
 ## Configuration
 
+### RSS Feeds
+
+The bot reads RSS feeds from a `feeds.json` file. You can customize which feeds to monitor by editing this file or providing your own.
+
+**Default feeds** include AWS-related content. See [FEEDS.md](FEEDS.md) for complete documentation on:
+- Feed file format
+- How to customize feeds
+- Examples for different use cases
+
 ### Default RSS Feeds
 
-The system includes these AWS feeds by default:
+The default `feeds.json` includes these AWS feeds:
 - AWS Blog: `https://aws.amazon.com/blogs/aws/feed/`
 - AWS What's New: `https://aws.amazon.com/about-aws/whats-new/recent/feed/`
 - AWS Security Blog: `https://aws.amazon.com/blogs/security/feed/`
@@ -68,13 +77,44 @@ The system includes these AWS feeds by default:
 
 ### Customization
 
-You can completely replace feeds using CloudFormation parameters. See documentation for details.
+You can customize feeds by:
+1. Editing the `feeds.json` file in the project root
+2. Providing a custom feeds file during deployment
+
+See [FEEDS.md](FEEDS.md) for detailed instructions and examples.
+
+## Quick Start
+
+### Prerequisites
+
+- AWS CLI configured with appropriate credentials
+- Python 3.12 or compatible
+- Bot created via Telegram @BotFather
+
+### Deployment
+
+```bash
+# Initial deployment with default feeds
+./scripts/deploy.sh \
+  --telegram-token "YOUR_BOT_TOKEN" \
+  --chat-id "YOUR_CHAT_ID"
+
+# Or with custom feeds file
+./scripts/deploy.sh \
+  --telegram-token "YOUR_BOT_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --feeds-file /path/to/my-feeds.json
+```
+
+For complete deployment instructions, see [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md).
 
 ## Documentation
 
+- [RSS Feeds Configuration](FEEDS.md) - How to configure and customize RSS feeds
 - [Infrastructure Guide](docs/INFRASTRUCTURE.md) - Complete infrastructure setup
 - [Kiro Development Process](docs/kiro-prompt.md) - AI-assisted development methodology
 - [Prompts](prompts/README.md) - AI prompt templates
+- [Deployment Scripts](scripts/README.md) - Deployment automation documentation
 
 ## Development Methodology
 

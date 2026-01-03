@@ -26,6 +26,7 @@ The script automates the following steps:
 - Python 3.12 or higher
 - `zip` command available
 - Internet connection
+- **RSS feeds configuration**: See [FEEDS.md](../FEEDS.md) for feed configuration
 
 ### Basic Usage
 
@@ -80,8 +81,10 @@ The script automates the following steps:
 ./scripts/deploy.sh \
   --telegram-token "YOUR_TOKEN" \
   --chat-id "YOUR_CHAT_ID" \
-  --feeds "https://example.com/feed1.xml,https://example.com/feed2.xml"
+  --feeds-file /path/to/my-feeds.json
 ```
+
+See [FEEDS.md](../FEEDS.md) for feed file format and examples.
 
 #### 4. Dry Run
 ```bash

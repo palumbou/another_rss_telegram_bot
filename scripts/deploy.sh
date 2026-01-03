@@ -471,9 +471,10 @@ create_source_package() {
     print_status "Creating source archive"
     cd "$PROJECT_ROOT"
     
-    # Create zip with all source files including feeds
+    # Create zip with all source files including feeds and prompts
     zip -r "$SOURCE_ZIP" \
         src/ \
+        prompts/ \
         infrastructure/ \
         requirements.txt \
         buildspec.yml \

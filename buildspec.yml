@@ -21,6 +21,8 @@ phases:
       - pip install -r requirements.txt -t build/
       - echo "Copying source code..."
       - cp -r src build/
+      - echo "Copying prompts..."
+      - cp -r prompts build/
       - echo "Creating deployment package..."
       - cd build
       - zip -r ../lambda-deployment-package.zip . -q

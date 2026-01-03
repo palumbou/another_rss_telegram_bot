@@ -26,6 +26,7 @@ Lo script automatizza i seguenti passaggi:
 - Python 3.12 o superiore
 - Comando `zip` disponibile
 - Connessione internet
+- **Configurazione feed RSS**: Vedi [FEEDS.it.md](../FEEDS.IT.md) per la configurazione dei feed
 
 ### Utilizzo Base
 
@@ -80,8 +81,10 @@ Lo script automatizza i seguenti passaggi:
 ./scripts/deploy.sh \
   --telegram-token "TUO_TOKEN" \
   --chat-id "TUO_CHAT_ID" \
-  --feeds "https://example.com/feed1.xml,https://example.com/feed2.xml"
+  --feeds-file /percorso/al/mio-feeds.json
 ```
+
+Vedi [FEEDS.IT.md](../FEEDS.IT.md) per il formato del file feed ed esempi.
 
 #### 4. Dry Run
 ```bash
@@ -184,7 +187,7 @@ Lo script implementa best practice di sicurezza:
 
 Per modificare il comportamento dello script:
 
-1. **Feed predefiniti**: Modifica variabile `feed_urls`
+1. **Feed RSS**: Modifica il file `feeds.json` (vedi [FEEDS.IT.md](../FEEDS.IT.md))
 2. **Naming bucket**: Modifica logica generazione nome bucket
 3. **Nomi stack**: Cambia costanti nome stack predefinite
 
