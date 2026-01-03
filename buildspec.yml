@@ -1,0 +1,44 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "Installing dependencies..."
+      - pip install --upgrade pip
+      
+  pre_build:
+    commands:
+      - echo "Pre-build phase started on `date`"
+      - echo "Creating build directory..."
+      - mkdir -p build
+      
+  build:
+    commands:
+      - echo "Build phase started on `date`"
+      - echo "Installing Python dependencies..."
+      - pip install -r requirements.txt -t build/
+      - echo "Copying source code..."
+      - cp -r src build/
+      - echo "Creating deployment package..."
+      - cd build
+      - zip -r ../lambda-deployment-package.zip . -q
+      - cd ..
+      - echo "Build completed on `date`"
+      
+  post_build:
+    commands:
+      - echo "Post-build phase started on `date`"
+      - ls -lh lambda-deployment-package.zip
+      - echo "Build successful!"
+
+artifacts:
+  files:
+    - lambda-deployment-package.zip
+    - infrastructure/template.yaml
+  name: BuildArtifact
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'

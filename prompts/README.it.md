@@ -1,8 +1,8 @@
-# Prompt Templates
+# Template Prompt
 
-> **Available languages**: [English (current)](README.md) | [Italiano](README.it.md)
+> **Lingue disponibili**: [English](README.md) | [Italiano (corrente)](README.it.md)
 
-This directory contains prompt templates used by the AI services in the RSS Telegram Bot system.
+Questa directory contiene i template per i prompt utilizzati dai servizi AI del sistema RSS Telegram Bot.
 
 ## bedrock_summary_template.txt
 
@@ -36,8 +36,7 @@ Per modificare il formato dei riassunti:
 
 1. Modifica il template in `bedrock_summary_template.txt`
 2. Aggiorna la logica di parsing in `src/summarize.py`
-3. Aggiorna i test in `tests/test_summarize_*.py`
-4. Testa con diversi tipi di contenuto
+3. Testa con diversi tipi di contenuto
 
 ### Variabili Template
 
@@ -53,10 +52,7 @@ Per modificare il formato dei riassunti:
 
 ### Testing
 
-Il template è testato tramite:
-- Test unitari con contenuti specifici
-- Test property-based per formato consistente
-- Validazione manuale con diversi tipi di articoli
+Il template è testato tramite validazione manuale con diversi tipi di articoli.
 
 ### Fallback
 

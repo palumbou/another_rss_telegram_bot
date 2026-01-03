@@ -1,75 +1,89 @@
 # Scripts Directory
 
-Questa directory contiene gli script di automazione per il progetto Another RSS Telegram Bot.
+> **Available languages**: [English (current)](README.md) | [Italiano](README.it.md)
+
+This directory contains automation scripts for the Another RSS Telegram Bot project.
 
 ## deploy.sh
 
-Script di deployment automatizzato per AWS che gestisce l'intero processo di distribuzione del bot.
+Automated deployment script for AWS that manages the entire CI/CD pipeline deployment process.
 
-### Funzionalità
+### Features
 
-Lo script automatizza i seguenti passaggi:
+The script automates the following steps:
 
-1. **Verifica prerequisiti**: Controlla che AWS CLI, Python 3, e zip siano installati
-2. **Creazione bucket S3**: Crea un bucket per gli artifact di deployment (opzionale)
-3. **Build del package Lambda**: Installa dipendenze e crea il package di deployment
-4. **Upload su S3**: Carica il package Lambda su S3
-5. **Gestione segreti**: Memorizza il token Telegram in AWS Secrets Manager
-6. **Deploy CloudFormation**: Distribuisce l'infrastruttura AWS
-7. **Aggiornamento codice**: Aggiorna il codice della funzione Lambda
+1. **Prerequisites Check**: Verifies AWS CLI, Python 3, and zip are installed
+2. **S3 Bucket Creation**: Creates artifact bucket (if needed)
+3. **Pipeline Deployment**: Deploys CodePipeline infrastructure
+4. **Source Packaging**: Creates source code package
+5. **S3 Upload**: Uploads source to S3, triggering the pipeline
+6. **Automatic Build**: CodeBuild packages the Lambda function
+7. **Automatic Deploy**: CloudFormation deploys the application
 
-### Prerequisiti
+### Prerequisites
 
-- AWS CLI configurato con credenziali appropriate
-- Python 3.8 o superiore
-- Comando `zip` disponibile
-- Connessione internet per scaricare le dipendenze
+- AWS CLI configured with appropriate credentials
+- Python 3.12 or higher
+- `zip` command available
+- Internet connection
 
-### Utilizzo Base
+### Basic Usage
 
 ```bash
-# Deployment minimo (richiede solo token e chat ID)
+# Initial deployment (creates pipeline and deploys application)
 ./scripts/deploy.sh \
   --telegram-token "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" \
   --chat-id "-1001234567890"
 ```
 
-### Opzioni Avanzate
+### Update Code
 
 ```bash
-# Deployment personalizzato completo
-./scripts/deploy.sh \
-  --stack-name "my-rss-bot" \
-  --region "eu-west-1" \
-  --bot-name "my-custom-bot" \
-  --telegram-token "123456:ABC-DEF..." \
-  --chat-id "-1001234567890" \
-  --feeds "https://example.com/feed1.xml,https://example.com/feed2.xml" \
-  --schedule "cron(0 8 * * ? *)" \
-  --timezone "Europe/London" \
-  --bucket "my-custom-bucket"
+# Update code only (triggers pipeline)
+./scripts/deploy.sh --update-code
 ```
 
-### Parametri Disponibili
+### Available Options
 
-| Parametro | Descrizione | Default | Richiesto |
-|-----------|-------------|---------|-----------|
-| `--stack-name` | Nome dello stack CloudFormation | `another-rss-telegram-bot` | No |
-| `--region` | Regione AWS | `us-east-1` | No |
-| `--bot-name` | Nome del bot per le risorse | `another-rss-telegram-bot` | No |
-| `--telegram-token` | Token del bot Telegram | - | **Sì** |
-| `--chat-id` | ID del canale/chat Telegram | - | **Sì** |
-| `--feeds` | URL dei feed RSS (separati da virgola) | Feed AWS predefiniti | No |
-| `--schedule` | Espressione cron per la schedulazione | `cron(0 9 * * ? *)` (9:00 AM daily) | No |
-| `--timezone` | Timezone per la schedulazione | `Europe/Rome` | No |
-| `--bucket` | Nome bucket S3 per artifact | Auto-generato | No |
-| `--no-create-bucket` | Non creare il bucket S3 (assume esista) | false | No |
-| `--dry-run` | Simula il deployment senza eseguirlo | false | No |
-| `--help` | Mostra l'help completo | - | No |
+| Parameter | Description | Default | Required |
+|-----------|-------------|---------|----------|
+| `--stack-name` | Pipeline stack name | `another-rss-telegram-bot-pipeline` | No |
+| `--app-stack` | Application stack name | `another-rss-telegram-bot-app` | No |
+| `--region` | AWS region | `us-east-1` | No |
+| `--bot-name` | Bot name for resources | `another-rss-telegram-bot` | No |
+| `--telegram-token` | Telegram bot token | - | **Yes** (initial) |
+| `--chat-id` | Telegram chat ID | - | **Yes** (initial) |
+| `--feeds` | RSS feed URLs (comma-separated) | AWS feeds | No |
+| `--bucket` | S3 bucket name | Auto-generated | No |
+| `--update-code` | Update code only | false | No |
+| `--cleanup` | Delete all resources | false | No |
+| `--dry-run` | Simulate without executing | false | No |
+| `--help` | Show help | - | No |
 
-### Esempi d'Uso
+### Usage Examples
 
-#### 1. Deployment di Test (Dry Run)
+#### 1. Initial Deployment
+```bash
+./scripts/deploy.sh \
+  --telegram-token "YOUR_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --region "eu-west-1"
+```
+
+#### 2. Update Code
+```bash
+./scripts/deploy.sh --update-code --region "eu-west-1"
+```
+
+#### 3. Custom Feeds
+```bash
+./scripts/deploy.sh \
+  --telegram-token "YOUR_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --feeds "https://example.com/feed1.xml,https://example.com/feed2.xml"
+```
+
+#### 4. Dry Run
 ```bash
 ./scripts/deploy.sh \
   --telegram-token "YOUR_TOKEN" \
@@ -77,99 +91,103 @@ Lo script automatizza i seguenti passaggi:
   --dry-run
 ```
 
-#### 2. Deployment in Europa con Feed Personalizzati
+#### 5. Cleanup
 ```bash
-./scripts/deploy.sh \
-  --region "eu-west-1" \
-  --telegram-token "YOUR_TOKEN" \
-  --chat-id "YOUR_CHAT_ID" \
-  --feeds "https://techcrunch.com/feed/,https://www.theverge.com/rss/index.xml" \
-  --timezone "Europe/London"
+./scripts/deploy.sh --cleanup --region "eu-west-1"
 ```
 
-#### 3. Deployment con Schedulazione Personalizzata
-```bash
-./scripts/deploy.sh \
-  --telegram-token "YOUR_TOKEN" \
-  --chat-id "YOUR_CHAT_ID" \
-  --schedule "cron(0 */6 * * ? *)" \  # Ogni 6 ore
-  --timezone "America/New_York"
-```
+### How to Get Required Parameters
 
-### Come Ottenere i Parametri Richiesti
+#### Telegram Bot Token
+1. Contact [@BotFather](https://t.me/botfather) on Telegram
+2. Use `/newbot` command to create a new bot
+3. Follow instructions to choose name and username
+4. Copy the provided token (format: `123456:ABC-DEF...`)
 
-#### Token Telegram Bot
-1. Contatta [@BotFather](https://t.me/botfather) su Telegram
-2. Usa il comando `/newbot` per creare un nuovo bot
-3. Segui le istruzioni per scegliere nome e username
-4. Copia il token fornito (formato: `123456:ABC-DEF...`)
+#### Telegram Chat ID
+1. Add the bot to your channel/group
+2. Send a message in the channel/group
+3. Visit: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+4. Find the `"chat":{"id":...}` field in the response
+5. Use the ID found (channels start with `-100`)
 
-#### Chat ID Telegram
-1. Aggiungi il bot al canale/gruppo desiderato
-2. Invia un messaggio nel canale/gruppo
-3. Visita: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
-4. Cerca il campo `"chat":{"id":...}` nella risposta
-5. Usa l'ID trovato (per i canali inizia con `-100`)
+### Deployment Workflow
 
-### Output del Deployment
+#### Initial Deployment
+1. Script creates S3 bucket for artifacts
+2. Deploys CodePipeline infrastructure stack
+3. Packages source code into zip
+4. Uploads source to S3 (`source/source.zip`)
+5. S3 event triggers CodePipeline
+6. CodeBuild builds Lambda package
+7. CloudFormation deploys application
 
-Lo script fornisce informazioni dettagliate durante l'esecuzione:
+#### Code Updates
+1. Script packages updated source code
+2. Uploads to S3 (`source/source.zip`)
+3. S3 event triggers CodePipeline
+4. Pipeline rebuilds and redeploys automatically
 
-- ✅ **Controlli prerequisiti**: Verifica delle dipendenze
-- 📦 **Build package**: Creazione del package Lambda
-- ☁️ **Upload S3**: Caricamento degli artifact
-- 🔐 **Secrets Manager**: Gestione sicura del token
-- 🚀 **CloudFormation**: Deployment dell'infrastruttura
-- 📊 **Risultati**: Link utili per monitoraggio
+### Output
+
+The script provides detailed information during execution:
+
+- ✅ **Prerequisites checks**: Dependency verification
+- 📦 **Source packaging**: Creating source archive
+- ☁️ **S3 upload**: Uploading artifacts
+- 🚀 **Pipeline deployment**: Infrastructure setup
+- 📊 **Results**: Links for monitoring
 
 ### Troubleshooting
 
-#### Errori Comuni
+#### Common Issues
 
 1. **AWS credentials not configured**
    ```bash
    aws configure
-   # Inserisci Access Key ID, Secret Access Key, e region
+   # Enter Access Key ID, Secret Access Key, and region
    ```
 
 2. **Bucket already exists**
-   - Usa `--bucket` con un nome diverso
-   - Oppure usa `--no-create-bucket` se il bucket esiste già
+   - Use `--bucket` with a different name
+   - Or delete the existing bucket first
 
-3. **Lambda package too large**
-   - Verifica che `requirements.txt` contenga solo dipendenze necessarie
-   - Considera l'uso di Lambda Layers per dipendenze pesanti
+3. **Pipeline not triggering**
+   - Check S3 event notification is configured
+   - Verify EventBridge rule is enabled
+   - Check CloudWatch logs for errors
 
-4. **CloudFormation stack update failed**
-   - Controlla i log di CloudFormation nella console AWS
-   - Verifica che i parametri siano corretti
-   - Usa `--dry-run` per testare la configurazione
+4. **Stack update failed**
+   - Check CloudFormation events in AWS Console
+   - Verify parameters are correct
+   - Use `--dry-run` to test configuration
 
-#### Log e Monitoraggio
+### Monitoring
 
-Dopo il deployment, puoi monitorare il bot tramite:
+After deployment, monitor the bot via:
 
+- **CodePipeline Console**: Check pipeline execution status
 - **CloudWatch Logs**: `/aws/lambda/{bot-name}-processor`
 - **CloudWatch Dashboard**: `{bot-name}-monitoring`
-- **AWS Console**: Link fornito nell'output del deployment
+- **AWS Console**: Links provided in script output
 
-### Sicurezza
+### Security
 
-Lo script implementa le seguenti misure di sicurezza:
+The script implements security best practices:
 
-- 🔐 Token Telegram memorizzato in AWS Secrets Manager
-- 🛡️ Bucket S3 con crittografia server-side abilitata
-- 🔒 Versioning abilitato per gli artifact
-- 👤 Principio del minimo privilegio per i ruoli IAM
+- 🔐 Telegram token stored in AWS Secrets Manager
+- 🛡️ S3 bucket with server-side encryption
+- 🔒 Versioning enabled for artifacts
+- 👤 Least privilege IAM roles
 
-### Personalizzazione
+### Customization
 
-Per modificare il comportamento dello script:
+To modify script behavior:
 
-1. **Feed RSS predefiniti**: Modifica la variabile `feed_urls` nel codice
-2. **Configurazione regioni**: Aggiorna la logica di creazione bucket per nuove regioni
-3. **Parametri CloudFormation**: Estendi l'array `cf_params` per nuovi parametri
+1. **Default feeds**: Edit `feed_urls` variable
+2. **Bucket naming**: Modify bucket name generation logic
+3. **Stack names**: Change default stack name constants
 
 ---
 
-*Questo script è parte dell'esperimento Kiro per l'automazione del deployment*
+*This script is part of the Kiro AI experiment for deployment automation*

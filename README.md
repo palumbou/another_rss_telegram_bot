@@ -1,180 +1,96 @@
 # Another RSS Telegram Bot
 
-## Descrizione
+A generic, reusable serverless bot that monitors RSS feeds and sends automatic updates to configured Telegram channels.
 
-Questo è un bot Telegram serverless che monitora feed RSS e invia aggiornamenti automatici ai canali configurati. Il sistema è completamente generico e riutilizzabile, deployabile con un singolo comando su AWS.
+> **Available languages**: [English (current)](README.md) | [Italiano](README.IT.md)
 
-## Esperimento Kiro
+## Overview
 
-**Questo progetto è un esperimento per testare le capacità di Kiro**, l'assistente AI per sviluppatori. L'obiettivo è esplorare come Kiro può assistere nello sviluppo di applicazioni complete, dalla specifica dei requisiti all'implementazione e testing.
+This project is a **Kiro AI experiment** exploring AI-assisted development from requirements specification to implementation and testing. The system is completely generic and deployable to AWS with infrastructure automation.
 
-### Caratteristiche del progetto sviluppate con Kiro:
+### Key Features
 
-- ✅ Specifica completa dei requisiti usando il formato EARS
-- ✅ Design architetturale con proprietà di correttezza
-- ✅ Implementazione guidata da property-based testing
-- ✅ Test automatizzati con Hypothesis per Python
-- ✅ Infrastructure-as-Code con CloudFormation
-- ✅ Deployment automatizzato con script bash
-- ✅ Sistema di cleanup completo
+- **RSS Monitoring**: Periodic checking of configurable RSS feeds
+- **Deduplication**: Prevents duplicate content using DynamoDB
+- **AI Summaries**: Generates Italian summaries using Amazon Bedrock with fallback
+- **Telegram Integration**: Automatic formatted message delivery
+- **Error Handling**: Robust error management with Dead Letter Queue
+- **Structured Logging**: Complete logging system for debugging
+- **Monitoring**: CloudWatch dashboard and custom metrics
 
-## Funzionalità
+## Architecture
 
-- **Monitoraggio RSS**: Controllo periodico di feed RSS configurabili
-- **Deduplicazione**: Evita l'invio di contenuti duplicati usando DynamoDB
-- **Riassunto automatico**: Genera riassunti in italiano usando Amazon Bedrock con fallback
-- **Integrazione Telegram**: Invio automatico di messaggi formattati ai canali
-- **Gestione errori**: Handling robusto degli errori con Dead Letter Queue
-- **Logging strutturato**: Sistema di logging completo per debugging
-- **Monitoraggio**: Dashboard CloudWatch e metriche personalizzate
+Serverless system on AWS with the following components:
 
-## Architettura
+### AWS Components
+- **Lambda Function**: Main processing logic (Python 3.12)
+- **DynamoDB**: Deduplication storage with 90-day TTL
+- **EventBridge Scheduler**: Daily scheduled execution
+- **Secrets Manager**: Secure Telegram token storage
+- **Amazon Bedrock**: AI summary generation with Claude 3 Haiku
+- **SQS Dead Letter Queue**: Error handling and retry
+- **CloudWatch**: Logging, metrics, and monitoring dashboard
+- **CodePipeline**: Automated build and deployment (CI/CD)
+- **S3**: Artifact storage and pipeline automation
 
-Sistema serverless su AWS con i seguenti componenti:
-
-### Componenti AWS:
-- **Lambda Function**: Logica di elaborazione principale (Python 3.12)
-- **DynamoDB**: Storage per deduplicazione con TTL di 90 giorni
-- **EventBridge Scheduler**: Esecuzione giornaliera programmata
-- **Secrets Manager**: Storage sicuro per token Telegram
-- **Amazon Bedrock**: Generazione riassunti AI con Claude 3 Haiku
-- **SQS Dead Letter Queue**: Gestione errori e retry
-- **CloudWatch**: Logging, metriche e dashboard di monitoraggio
-
-### Componenti Codice:
-- `src/lambda_handler.py`: Entry point principale e orchestrazione
-- `src/rss.py`: Gestione dei feed RSS con feedparser
-- `src/telegram.py`: Integrazione con Telegram Bot API
-- `src/summarize.py`: Generazione riassunti con Bedrock e fallback
-- `src/dedup.py`: Sistema di deduplicazione con DynamoDB
-- `src/config.py`: Gestione configurazione e variabili ambiente
-- `src/models.py`: Modelli dati e strutture
+### Code Components
+- `src/lambda_handler.py`: Main entry point and orchestration
+- `src/rss.py`: RSS feed management with feedparser
+- `src/telegram.py`: Telegram Bot API integration
+- `src/summarize.py`: Summary generation with Bedrock and fallback
+- `src/dedup.py`: DynamoDB deduplication system
+- `src/config.py`: Configuration and environment management
+- `src/models.py`: Data models and structures
 
 ## Quick Start
 
-### 1. Prerequisiti
+### Prerequisites
 
-- AWS CLI configurato con credenziali appropriate
-- Python 3.12 o compatibile
-- Comando `zip` disponibile
-- Bot Telegram creato tramite @BotFather
+- AWS CLI configured with appropriate credentials
+- Python 3.12 or compatible
+- Bot created via Telegram @BotFather
+- GitHub repository (for CodePipeline integration)
 
-### 2. Deployment
+### Deployment
 
-```bash
-# Deployment base con feed AWS di default
-./scripts/deploy.sh \
-  --telegram-token "YOUR_BOT_TOKEN" \
-  --chat-id "YOUR_CHAT_ID" \
-  --region "eu-west-1"
+The system uses AWS CodePipeline for automated deployment. See [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) for complete setup instructions.
 
-# Deployment con feed personalizzati
-./scripts/deploy.sh \
-  --telegram-token "YOUR_BOT_TOKEN" \
-  --chat-id "YOUR_CHAT_ID" \
-  --region "eu-west-1" \
-  --feeds "https://example.com/feed1.xml,https://example.com/feed2.xml"
+## Configuration
 
-# Dry run per vedere cosa verrebbe deployato
-./scripts/deploy.sh \
-  --telegram-token "YOUR_BOT_TOKEN" \
-  --chat-id "YOUR_CHAT_ID" \
-  --dry-run
-```
+### Default RSS Feeds
 
-### 3. Cleanup
-
-```bash
-# Rimuovi tutte le risorse AWS create
-./scripts/deploy.sh --cleanup --region "eu-west-1"
-
-# Dry run del cleanup
-./scripts/deploy.sh --cleanup --region "eu-west-1" --dry-run
-```
-
-## Configurazione
-
-### Feed RSS di Default
-
-Il sistema include questi feed AWS per default:
+The system includes these AWS feeds by default:
 - AWS Blog: `https://aws.amazon.com/blogs/aws/feed/`
 - AWS What's New: `https://aws.amazon.com/about-aws/whats-new/recent/feed/`
 - AWS Security Blog: `https://aws.amazon.com/blogs/security/feed/`
 - AWS Compute Blog: `https://aws.amazon.com/blogs/compute/feed/`
 - AWS Database Blog: `https://aws.amazon.com/blogs/database/feed/`
 
-### Personalizzazione
+### Customization
 
-Puoi sostituire completamente i feed usando il parametro `--feeds`:
+You can completely replace feeds using CloudFormation parameters. See documentation for details.
 
-```bash
-./scripts/deploy.sh \
-  --telegram-token "YOUR_TOKEN" \
-  --chat-id "YOUR_CHAT_ID" \
-  --feeds "https://your-site.com/feed.xml,https://another-site.com/rss.xml"
-```
+## Documentation
 
-### Parametri Avanzati
+- [Infrastructure Guide](docs/INFRASTRUCTURE.md) - Complete infrastructure setup
+- [Kiro Development Process](docs/kiro-prompt.md) - AI-assisted development methodology
+- [Prompts](prompts/README.md) - AI prompt templates
 
-```bash
-./scripts/deploy.sh \
-  --stack-name "my-custom-bot" \
-  --bot-name "my-rss-bot" \
-  --schedule "cron(0 8 * * ? *)" \
-  --timezone "America/New_York" \
-  --telegram-token "YOUR_TOKEN" \
-  --chat-id "YOUR_CHAT_ID"
-```
+## Development Methodology
 
-## Testing
+This project was developed using **spec-driven development** with Kiro AI:
 
-Il progetto utilizza un approccio dual-testing:
+- ✅ Complete requirements specification using EARS format
+- ✅ Architectural design with correctness properties
+- ✅ Property-based testing implementation
+- ✅ Automated testing with Hypothesis for Python
+- ✅ Infrastructure-as-Code with CloudFormation
+- ✅ Automated deployment with CodePipeline
 
-- **Unit tests**: Test specifici per casi d'uso e edge cases
-- **Property-based tests**: Test con Hypothesis per validare proprietà universali
+## License
 
-```bash
-# Esegui tutti i test
-pytest
-
-# Esegui solo i test unitari
-pytest -m unit
-
-# Esegui solo i property-based tests
-pytest -m property
-
-# Esegui solo i property tests
-pytest -k "properties"
-
-# Esegui solo i unit tests  
-pytest -k "unit"
-```
-
-## Deployment
-
-Il progetto è configurato per il deployment su AWS Lambda usando SAM (Serverless Application Model).
-
-```bash
-# Build
-sam build
-
-# Deploy
-sam deploy --guided
-```
-
-## Configurazione
-
-Il bot richiede le seguenti variabili d'ambiente:
-
-- `TELEGRAM_BOT_TOKEN`: Token del bot Telegram
-- `TELEGRAM_CHAT_ID`: ID del canale/chat di destinazione
-- `RSS_FEEDS`: Lista dei feed RSS da monitorare (JSON)
-- `BEDROCK_MODEL_ID`: ID del modello AWS Bedrock per i riassunti
-
-## Licenza
-
-Questo progetto è rilasciato sotto licenza MIT.
+This project is released under the MIT License.
 
 ---
 
-*Sviluppato come esperimento con Kiro AI Assistant*
+*Developed as an experiment with Kiro AI Assistant*

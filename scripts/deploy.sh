@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # Another RSS Telegram Bot - Deployment Script
-# Generic serverless RSS-to-Telegram system deployment automation
-# Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
+# Deployment automation with CodePipeline and S3 source
 
 set -e  # Exit on any error
 
@@ -14,7 +13,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default configuration
-DEFAULT_STACK_NAME="another-rss-telegram-bot"
+DEFAULT_STACK_NAME="another-rss-telegram-bot-pipeline"
+DEFAULT_APP_STACK_NAME="another-rss-telegram-bot-app"
 DEFAULT_REGION="us-east-1"
 DEFAULT_BOT_NAME="another-rss-telegram-bot"
 
@@ -22,13 +22,11 @@ DEFAULT_BOT_NAME="another-rss-telegram-bot"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 INFRASTRUCTURE_DIR="$PROJECT_ROOT/infrastructure"
-SRC_DIR="$PROJECT_ROOT/src"
-REQUIREMENTS_FILE="$PROJECT_ROOT/requirements.txt"
-TEMPLATE_FILE="$INFRASTRUCTURE_DIR/template.yaml"
+TEMPLATE_FILE="$INFRASTRUCTURE_DIR/pipeline-template.yaml"
 
 # Deployment artifacts
 BUILD_DIR="$PROJECT_ROOT/build"
-LAMBDA_ZIP="$BUILD_DIR/lambda-deployment-package.zip"
+SOURCE_ZIP="$BUILD_DIR/source.zip"
 
 # Function to print colored output
 print_status() {
@@ -56,43 +54,37 @@ show_usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Deploy Another RSS Telegram Bot to AWS
+Deploy Another RSS Telegram Bot to AWS using CodePipeline
 
 OPTIONS:
-    -s, --stack-name STACK_NAME     CloudFormation stack name (default: $DEFAULT_STACK_NAME)
+    -s, --stack-name STACK_NAME     CloudFormation pipeline stack name (default: $DEFAULT_STACK_NAME)
+    -a, --app-stack APP_STACK       Application stack name (default: $DEFAULT_APP_STACK_NAME)
     -r, --region REGION             AWS region (default: $DEFAULT_REGION)
     -b, --bot-name BOT_NAME         Bot name for resource naming (default: $DEFAULT_BOT_NAME)
-    -t, --telegram-token TOKEN      Telegram bot token (required for deploy)
-    -c, --chat-id CHAT_ID           Telegram chat ID (required for deploy)
+    -t, --telegram-token TOKEN      Telegram bot token (required for initial deploy)
+    -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
     -f, --feeds FEED_URLS           Comma-separated RSS feed URLs (optional, uses AWS defaults)
-    --schedule EXPRESSION           EventBridge schedule expression (optional, default: daily 9 AM)
-    --timezone TIMEZONE             Schedule timezone (optional, default: Europe/Rome)
     --bucket BUCKET_NAME            S3 bucket for artifacts (optional, auto-generated if not provided)
-    --no-create-bucket              Don't create S3 bucket (assume it exists)
     --cleanup                       Delete all AWS resources created by this bot
+    --update-code                   Update only the source code (trigger pipeline)
     --dry-run                       Show what would be deployed without executing
     -h, --help                      Show this help message
 
 EXAMPLES:
-    # Basic deployment with required parameters
+    # Initial deployment (creates pipeline)
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890"
     
-    # Custom configuration
-    $0 --stack-name "my-rss-bot" --region "eu-west-1" \\
-       --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
-       --feeds "https://example.com/feed1.xml,https://example.com/feed2.xml"
+    # Update code only (triggers pipeline)
+    $0 --update-code
     
     # Cleanup all resources
     $0 --cleanup --region "eu-west-1"
-    
-    # Dry run to see what would be deployed
-    $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" --dry-run
 
-REQUIREMENTS:
-    - AWS CLI configured with appropriate permissions
-    - Python 3.12 or compatible version
-    - zip command available
-    - Internet connection for downloading dependencies
+WORKFLOW:
+    1. Initial deployment creates the CodePipeline infrastructure
+    2. Source code is packaged and uploaded to S3
+    3. Pipeline automatically builds and deploys the application
+    4. Subsequent updates only need --update-code flag
 
 EOF
 }
@@ -406,165 +398,78 @@ create_s3_bucket() {
     print_success "S3 bucket '$bucket_name' created successfully"
 }
 
-# Function to build and package Lambda function (Requirements 2.2)
-build_lambda_package() {
-    print_header "Building Lambda Deployment Package"
+# Function to create source package
+create_source_package() {
+    print_header "Creating Source Package"
     
-    # Clean and create build directory
     print_status "Preparing build directory"
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR"
     
-    # Create temporary directory for dependencies
-    local temp_dir="$BUILD_DIR/temp"
-    mkdir -p "$temp_dir"
-    
-    # Install Python dependencies
-    print_status "Installing Python dependencies"
     if [[ "$DRY_RUN" == "true" ]]; then
-        print_status "[DRY RUN] Would install dependencies from: $REQUIREMENTS_FILE"
-    else
-        # Install only production dependencies (exclude dev dependencies)
-        python3 -m pip install \
-            --target "$temp_dir" \
-            --requirement "$REQUIREMENTS_FILE" \
-            --no-deps \
-            --quiet \
-            feedparser boto3 requests beautifulsoup4 python-dateutil
-        
-        print_success "Dependencies installed successfully"
+        print_status "[DRY RUN] Would create source package: $SOURCE_ZIP"
+        return 0
     fi
     
-    # Copy source code
-    print_status "Copying source code"
-    cp -r "$SRC_DIR" "$temp_dir/"
+    print_status "Creating source archive"
+    cd "$PROJECT_ROOT"
     
-    # Create deployment package
-    print_status "Creating deployment package"
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_status "[DRY RUN] Would create Lambda zip package: $LAMBDA_ZIP"
-    else
-        cd "$temp_dir"
-        zip -r "$LAMBDA_ZIP" . -q
-        cd "$PROJECT_ROOT"
-        
-        local zip_size=$(du -h "$LAMBDA_ZIP" | cut -f1)
-        print_success "Lambda package created: $LAMBDA_ZIP ($zip_size)"
-    fi
+    # Create zip with all source files
+    zip -r "$SOURCE_ZIP" \
+        src/ \
+        infrastructure/ \
+        requirements.txt \
+        buildspec.yml \
+        -x "*.pyc" "*__pycache__*" "*.git*" \
+        -q
+    
+    local zip_size=$(du -h "$SOURCE_ZIP" | cut -f1)
+    print_success "Source package created: $SOURCE_ZIP ($zip_size)"
 }
 
-# Function to upload Lambda package to S3
-upload_lambda_package() {
+# Function to upload source to S3 and trigger pipeline
+upload_source_and_trigger() {
     local bucket_name="$1"
     local region="$2"
     
-    local s3_key="lambda-packages/$(basename "$LAMBDA_ZIP")"
-    LAMBDA_S3_URI="s3://$bucket_name/$s3_key"
+    local s3_key="source/source.zip"
+    local s3_uri="s3://$bucket_name/$s3_key"
     
     if [[ "$DRY_RUN" == "true" ]]; then
-        print_header "Uploading Lambda Package to S3"
-        print_status "[DRY RUN] Would upload Lambda package to: $LAMBDA_S3_URI"
+        print_header "Uploading Source to S3"
+        print_status "[DRY RUN] Would upload source to: $s3_uri"
+        print_status "[DRY RUN] This would trigger the CodePipeline automatically"
         return 0
     fi
     
-    print_header "Uploading Lambda Package to S3"
-    print_status "Uploading to: $LAMBDA_S3_URI"
-    aws s3 cp "$LAMBDA_ZIP" "$LAMBDA_S3_URI" --region "$region"
+    print_header "Uploading Source to S3"
+    print_status "Uploading to: $s3_uri"
     
-    # Wait for the file to be fully uploaded and available
-    print_status "Verifying upload completion..."
-    local max_attempts=30
-    local attempt=1
+    aws s3 cp "$SOURCE_ZIP" "$s3_uri" --region "$region"
     
-    while [[ $attempt -le $max_attempts ]]; do
-        if aws s3api head-object --bucket "$bucket_name" --key "$s3_key" --region "$region" &>/dev/null; then
-            print_success "Lambda package verified on S3"
-            break
-        else
-            print_status "Waiting for upload to complete... (attempt $attempt/$max_attempts)"
-            sleep 2
-            ((attempt++))
-        fi
-    done
-    
-    if [[ $attempt -gt $max_attempts ]]; then
-        print_error "Failed to verify Lambda package upload after $max_attempts attempts"
-        exit 1
-    fi
-    
-    print_success "Lambda package uploaded successfully"
+    print_success "Source uploaded successfully"
+    print_status "CodePipeline will be triggered automatically by S3 event"
 }
 
-# Function to create or update Secrets Manager secret (Requirements 2.4, 2.5)
-manage_telegram_secret() {
-    local secret_name="$1"
-    local telegram_token="$2"
-    local region="$3"
-    
-    print_header "Managing Telegram Bot Token in Secrets Manager"
-    
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_status "[DRY RUN] Would create/update secret: $secret_name"
-        return 0
-    fi
-    
-    # Check if secret already exists
-    if aws secretsmanager describe-secret --secret-id "$secret_name" --region "$region" &>/dev/null; then
-        print_status "Updating existing secret: $secret_name"
-        aws secretsmanager update-secret \
-            --secret-id "$secret_name" \
-            --secret-string "$telegram_token" \
-            --region "$region" \
-            --output table
-    else
-        print_status "Creating new secret: $secret_name"
-        # Try to create the secret
-        if ! aws secretsmanager create-secret \
-            --name "$secret_name" \
-            --secret-string "$telegram_token" \
-            --description "Telegram bot token for RSS Telegram Bot" \
-            --region "$region" \
-            --output table 2>/dev/null; then
-            
-            print_error "Failed to create secret. This might be due to a recently deleted secret with the same name."
-            print_error "AWS Secrets Manager requires 7 days before reusing a secret name."
-            print_error "Please try again with a different bot name or wait for the recovery period."
-            exit 1
-        fi
-    fi
-    
-    print_success "Telegram bot token stored securely in Secrets Manager"
-}
-
-# Function to deploy CloudFormation stack (Requirements 2.6)
-deploy_cloudformation() {
+# Function to deploy pipeline stack
+deploy_pipeline_stack() {
     local stack_name="$1"
     local region="$2"
     local bot_name="$3"
-    local telegram_token="$4"
-    local chat_id="$5"
-    local feed_urls="$6"
-    local schedule_expression="$7"
-    local timezone="$8"
-    local lambda_s3_uri="$9"
-    local secret_name="${10}"
+    local app_stack_name="$4"
+    local telegram_token="$5"
+    local chat_id="$6"
+    local feed_urls="$7"
     
-    print_header "Deploying CloudFormation Stack"
-    
-    # Extract bucket and key from S3 URI
-    local s3_bucket=$(echo "$lambda_s3_uri" | sed 's|s3://||' | cut -d'/' -f1 | tr -d '[:space:]' | tr -d '[:cntrl:]')
-    local s3_key=$(echo "$lambda_s3_uri" | sed 's|s3://[^/]*/||' | tr -d '[:space:]' | tr -d '[:cntrl:]')
+    print_header "Deploying Pipeline Stack"
     
     if [[ "$DRY_RUN" == "true" ]]; then
-        print_status "[DRY RUN] Would deploy CloudFormation stack with parameters:"
-        print_status "BotName=$bot_name"
-        print_status "TelegramChatId=$chat_id"
-        print_status "TelegramSecretName=$secret_name"
-        print_status "LambdaS3Bucket=$s3_bucket"
-        print_status "LambdaS3Key=$s3_key"
-        print_status "RSSFeedUrls=$feed_urls"
-        print_status "ScheduleExpression=$schedule_expression"
-        print_status "ScheduleTimezone=$timezone"
+        print_status "[DRY RUN] Would deploy pipeline stack: $stack_name"
+        print_status "Parameters:"
+        print_status "  BotName: $bot_name"
+        print_status "  ApplicationStackName: $app_stack_name"
+        print_status "  TelegramChatId: $chat_id"
+        print_status "  RSSFeedUrls: $feed_urls"
         return 0
     fi
     
@@ -572,37 +477,34 @@ deploy_cloudformation() {
     print_status "Template: $TEMPLATE_FILE"
     print_status "Region: $region"
     
-    # Debug: Print parameter values
-    print_status "Parameters:"
-    print_status "  BotName: $bot_name"
-    print_status "  TelegramChatId: $chat_id"
-    print_status "  TelegramBotToken: [HIDDEN]"
-    print_status "  TelegramSecretName: $secret_name"
-    print_status "  LambdaS3Bucket: $s3_bucket"
-    print_status "  LambdaS3Key: $s3_key"
-    print_status "  RSSFeedUrls: $feed_urls"
-    print_status "  ScheduleExpression: $schedule_expression"
-    print_status "  ScheduleTimezone: $timezone"
-    
-    # Deploy the stack using individual parameter overrides
     aws cloudformation deploy \
         --template-file "$TEMPLATE_FILE" \
         --stack-name "$stack_name" \
         --parameter-overrides \
             "BotName=$bot_name" \
+            "ApplicationStackName=$app_stack_name" \
             "TelegramBotToken=$telegram_token" \
             "TelegramChatId=$chat_id" \
-            "TelegramSecretName=$secret_name" \
-            "LambdaS3Bucket=$s3_bucket" \
-            "LambdaS3Key=$s3_key" \
             "RSSFeedUrls=$feed_urls" \
-            "ScheduleExpression=$schedule_expression" \
-            "ScheduleTimezone=$timezone" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$region" \
         --no-fail-on-empty-changeset
     
-    print_success "CloudFormation stack deployed successfully"
+    print_success "Pipeline stack deployed successfully"
+}
+
+# Function to get bucket name from stack
+get_artifact_bucket() {
+    local stack_name="$1"
+    local region="$2"
+    
+    local bucket=$(aws cloudformation describe-stacks \
+        --stack-name "$stack_name" \
+        --region "$region" \
+        --query 'Stacks[0].Outputs[?OutputKey==`ArtifactBucketName`].OutputValue' \
+        --output text 2>/dev/null || echo "")
+    
+    echo "$bucket"
 }
 
 # Function to display deployment results
@@ -658,23 +560,26 @@ show_deployment_results() {
 main() {
     # Default values
     local stack_name="$DEFAULT_STACK_NAME"
+    local app_stack_name="$DEFAULT_APP_STACK_NAME"
     local region="$DEFAULT_REGION"
     local bot_name="$DEFAULT_BOT_NAME"
     local telegram_token=""
     local chat_id=""
     local feed_urls="https://aws.amazon.com/blogs/aws/feed/,https://aws.amazon.com/about-aws/whats-new/recent/feed/,https://aws.amazon.com/blogs/security/feed/,https://aws.amazon.com/blogs/compute/feed/,https://aws.amazon.com/blogs/database/feed/"
-    local schedule_expression="cron(0 9 * * ? *)"
-    local timezone="Europe/Rome"
     local bucket_name=""
-    local create_bucket="true"
     local dry_run="false"
     local cleanup_mode="false"
+    local update_code_only="false"
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             -s|--stack-name)
                 stack_name="$2"
+                shift 2
+                ;;
+            -a|--app-stack)
+                app_stack_name="$2"
                 shift 2
                 ;;
             -r|--region)
@@ -697,24 +602,16 @@ main() {
                 feed_urls="$2"
                 shift 2
                 ;;
-            --schedule)
-                schedule_expression="$2"
-                shift 2
-                ;;
-            --timezone)
-                timezone="$2"
-                shift 2
-                ;;
             --bucket)
                 bucket_name="$2"
                 shift 2
                 ;;
-            --no-create-bucket)
-                create_bucket="false"
-                shift
-                ;;
             --cleanup)
                 cleanup_mode="true"
+                shift
+                ;;
+            --update-code)
+                update_code_only="true"
                 shift
                 ;;
             --dry-run)
@@ -739,49 +636,73 @@ main() {
     # Generate bucket name if not provided
     if [[ -z "$bucket_name" ]]; then
         local account_id=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "unknown")
-        bucket_name="$bot_name-artifacts-$account_id-$region"
+        bucket_name="$bot_name-pipeline-artifacts-$account_id"
     fi
     
     # Handle cleanup mode
     if [[ "$cleanup_mode" == "true" ]]; then
         print_header "Cleanup Mode"
-        echo "Stack Name: $stack_name"
+        echo "Pipeline Stack: $stack_name"
+        echo "App Stack: $app_stack_name"
         echo "Region: $region"
-        echo "Bot Name: $bot_name"
         echo "S3 Bucket: $bucket_name"
-        echo "Dry Run: $dry_run"
         
         if [[ "$dry_run" == "false" ]]; then
-            echo -e "\n${YELLOW}WARNING: This will delete ALL AWS resources created by this bot!${NC}"
+            echo -e "\n${YELLOW}WARNING: This will delete ALL AWS resources!${NC}"
             echo -e "${YELLOW}Press Enter to continue or Ctrl+C to cancel...${NC}"
             read -r
         fi
         
         cleanup_aws_resources "$stack_name" "$region" "$bot_name" "$bucket_name"
+        cleanup_aws_resources "$app_stack_name" "$region" "$bot_name" "$bucket_name"
         return 0
     fi
     
-    # Validate required parameters for deployment
+    # Handle update code only mode
+    if [[ "$update_code_only" == "true" ]]; then
+        print_header "Update Code Mode"
+        
+        # Get bucket from existing stack
+        local existing_bucket=$(get_artifact_bucket "$stack_name" "$region")
+        if [[ -z "$existing_bucket" ]]; then
+            print_error "Could not find artifact bucket. Pipeline stack may not exist."
+            print_error "Run initial deployment first without --update-code flag."
+            exit 1
+        fi
+        
+        bucket_name="$existing_bucket"
+        print_status "Using existing bucket: $bucket_name"
+        
+        check_prerequisites
+        create_source_package
+        upload_source_and_trigger "$bucket_name" "$region"
+        
+        print_success "Code updated! Pipeline will deploy automatically."
+        print_status "Monitor pipeline at: https://$region.console.aws.amazon.com/codesuite/codepipeline/pipelines"
+        return 0
+    fi
+    
+    # Initial deployment - validate required parameters
     if [[ -z "$telegram_token" ]]; then
-        print_error "Telegram bot token is required. Use --telegram-token option."
+        print_error "Telegram bot token is required for initial deployment. Use --telegram-token option."
         show_usage
         exit 1
     fi
     
     if [[ -z "$chat_id" ]]; then
-        print_error "Telegram chat ID is required. Use --chat-id option."
+        print_error "Telegram chat ID is required for initial deployment. Use --chat-id option."
         show_usage
         exit 1
     fi
     
     # Show deployment configuration
-    print_header "Deployment Configuration"
-    echo "Stack Name: $stack_name"
+    print_header "Initial Deployment Configuration"
+    echo "Pipeline Stack: $stack_name"
+    echo "App Stack: $app_stack_name"
     echo "Region: $region"
     echo "Bot Name: $bot_name"
     echo "Chat ID: $chat_id"
     echo "Feed URLs: $feed_urls"
-    echo "Schedule: $schedule_expression ($timezone)"
     echo "S3 Bucket: $bucket_name"
     echo "Dry Run: $dry_run"
     
@@ -790,25 +711,16 @@ main() {
         read -r
     fi
     
-    # Generate unique secret name with timestamp to avoid 7-day deletion restriction
-    local timestamp=$(date +%s)
-    local secret_name="$bot_name-telegram-token-$timestamp"
-    
     # Execute deployment steps
     check_prerequisites
+    create_s3_bucket "$bucket_name" "$region"
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id" "$feed_urls"
+    create_source_package
+    upload_source_and_trigger "$bucket_name" "$region"
     
-    if [[ "$create_bucket" == "true" ]]; then
-        create_s3_bucket "$bucket_name" "$region"
-    fi
-    
-    build_lambda_package
-    upload_lambda_package "$bucket_name" "$region"
-    
-    manage_telegram_secret "$secret_name" "$telegram_token" "$region"
-    
-    deploy_cloudformation "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$feed_urls" "$schedule_expression" "$timezone" "$LAMBDA_S3_URI" "$secret_name"
-    
-    show_deployment_results "$stack_name" "$region"
+    print_success "Initial deployment completed!"
+    print_status "Pipeline will now build and deploy the application automatically."
+    print_status "Monitor at: https://$region.console.aws.amazon.com/codesuite/codepipeline/pipelines"
 }
 
 # Script entry point
