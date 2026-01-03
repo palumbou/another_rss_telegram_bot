@@ -38,6 +38,9 @@ Resources:
       BucketName: !Ref ArtifactBucketName
       VersioningConfiguration:
         Status: Enabled
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -163,6 +166,9 @@ Resources:
   # EventBridge Rule to trigger pipeline on S3 upload
   PipelineTriggerRule:
     Type: AWS::Events::Rule
+    DependsOn: 
+      - ArtifactBucket
+      - Pipeline
     Properties:
       Name: !Sub '${BotName}-pipeline-trigger'
       Description: 'Trigger pipeline when source code is uploaded to S3'
