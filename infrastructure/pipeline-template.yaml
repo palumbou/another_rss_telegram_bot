@@ -151,7 +151,7 @@ Resources:
                     "TelegramBotToken": "${TelegramBotToken}",
                     "TelegramChatId": "${TelegramChatId}",
                     "TelegramSecretName": "${BotName}-telegram-token",
-                    "LambdaS3Bucket": "${ArtifactBucketName}",
+                    "LambdaS3Bucket": "${ArtifactBucket}",
                     "LambdaS3Key": "lambda-deployment-package.zip",
                     "BedrockModelId": "${BedrockModelId}"
                   }
@@ -164,31 +164,33 @@ Resources:
           Value: Pipeline
 
   # EventBridge Rule to trigger pipeline on S3 upload
-  PipelineTriggerRule:
-    Type: AWS::Events::Rule
-    DependsOn: 
-      - ArtifactBucket
-      - Pipeline
-    Properties:
-      Name: !Sub '${BotName}-pipeline-trigger'
-      Description: 'Trigger pipeline when source code is uploaded to S3'
-      EventPattern:
-        source:
-          - aws.s3
-        detail-type:
-          - 'Object Created'
-        detail:
-          bucket:
-            name:
-              - !Ref ArtifactBucketName
-          object:
-            key:
-              - prefix: 'source/source.zip'
-      State: ENABLED
-      Targets:
-        - Arn: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}'
-          RoleArn: !GetAtt EventBridgeRole.Arn
-          Id: CodePipelineTarget
+  # Commented out temporarily due to CloudFormation validation issues
+  # Will be added in a separate stack update or triggered manually
+  # PipelineTriggerRule:
+  #   Type: AWS::Events::Rule
+  #   DependsOn: 
+  #     - ArtifactBucket
+  #     - Pipeline
+  #   Properties:
+  #     Name: !Sub '${BotName}-pipeline-trigger'
+  #     Description: 'Trigger pipeline when source code is uploaded to S3'
+  #     EventPattern:
+  #       source:
+  #         - aws.s3
+  #       detail-type:
+  #         - 'Object Created'
+  #       detail:
+  #         bucket:
+  #           name:
+  #             - !Ref ArtifactBucketName
+  #         object:
+  #           key:
+  #             - prefix: 'source/source.zip'
+  #     State: ENABLED
+  #     Targets:
+  #       - Arn: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}'
+  #         RoleArn: !GetAtt EventBridgeRole.Arn
+  #         Id: CodePipelineTarget
 
   # IAM Role for EventBridge to trigger CodePipeline
   EventBridgeRole:
