@@ -180,7 +180,7 @@ Resources:
         detail:
           bucket:
             name:
-              - !Ref ArtifactBucket
+              - !Ref ArtifactBucketName
           object:
             key:
               - prefix: 'source/source.zip'
