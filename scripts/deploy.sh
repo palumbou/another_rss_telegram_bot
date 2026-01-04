@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Another RSS Telegram Bot - Deployment Script
 # Deployment automation with CodePipeline and S3 source
@@ -14,7 +14,6 @@ NC='\033[0m' # No Color
 
 # Default configuration
 DEFAULT_STACK_NAME="another-rss-telegram-bot-pipeline"
-DEFAULT_APP_STACK_NAME="another-rss-telegram-bot-app"
 DEFAULT_REGION="us-east-1"
 DEFAULT_BOT_NAME="another-rss-telegram-bot"
 
@@ -58,18 +57,17 @@ Usage: $0 [OPTIONS]
 Deploy Another RSS Telegram Bot to AWS using CodePipeline
 
 OPTIONS:
-    -s, --stack-name STACK_NAME     CloudFormation pipeline stack name (default: $DEFAULT_STACK_NAME)
-    -a, --app-stack APP_STACK       Application stack name (default: $DEFAULT_APP_STACK_NAME)
+    -s, --stack-name STACK_NAME     CloudFormation stack name (default: $DEFAULT_STACK_NAME)
     -r, --region REGION             AWS region (default: $DEFAULT_REGION)
     -b, --bot-name BOT_NAME         Bot name for resource naming (default: $DEFAULT_BOT_NAME)
     -t, --telegram-token TOKEN      Telegram bot token (required for initial deploy)
     -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
     -f, --feeds-file FILE           Path to feeds.json file (optional, uses default if not provided)
-    -m, --bedrock-model MODEL_ID    Bedrock model ID (default: amazon.nova-micro-v1:0)
     --bucket BUCKET_NAME            S3 bucket for artifacts (optional, auto-generated if not provided)
     --cleanup                       Delete all AWS resources created by this bot
     --update-code                   Update only the source code (trigger pipeline)
     --dry-run                       Show what would be deployed without executing
+    -y, --yes                       Skip confirmation prompts
     -h, --help                      Show this help message
 
 PREREQUISITES:
@@ -311,44 +309,6 @@ check_prerequisites() {
     print_success "All prerequisites satisfied"
 }
 
-# Function to validate Bedrock model
-validate_bedrock_model() {
-    local model_id="$1"
-    local region="$2"
-    
-    print_header "Validating Bedrock Model"
-    
-    print_status "Checking if model exists: $model_id"
-    
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_status "[DRY RUN] Would validate Bedrock model: $model_id"
-        return 0
-    fi
-    
-    # Try to list foundation models and check if our model exists
-    if aws bedrock list-foundation-models --region "$region" --query "modelSummaries[?modelId=='$model_id'].modelId" --output text 2>/dev/null | grep -q "$model_id"; then
-        print_success "Bedrock model validated: $model_id"
-    else
-        print_warning "Model $model_id not found in foundation models list"
-        print_status "Checking if it's an inference profile..."
-        
-        # Check if it's a cross-region inference profile
-        if aws bedrock list-inference-profiles --region "$region" 2>/dev/null | grep -q "$model_id"; then
-            print_success "Bedrock inference profile validated: $model_id"
-        else
-            print_error "Bedrock model or inference profile not found: $model_id"
-            print_error "Please check:"
-            print_error "  1. Model ID is correct"
-            print_error "  2. Model is available in region: $region"
-            print_error "  3. You have access to the model"
-            print_error ""
-            print_error "To list available models, run:"
-            print_error "  aws bedrock list-foundation-models --region $region --query 'modelSummaries[].modelId'"
-            exit 1
-        fi
-    fi
-}
-
 # Function to create S3 bucket for artifacts (Requirements 2.3)
 create_s3_bucket() {
     local bucket_name="$1"
@@ -403,11 +363,18 @@ create_s3_bucket() {
             ]
         }'
     
-    # Get AWS account ID for bucket policy
-    local account_id=$(aws sts get-caller-identity --query Account --output text)
-    local bot_name_from_bucket=$(echo "$bucket_name" | cut -d'-' -f1-4)
+    print_success "S3 bucket '$bucket_name' created successfully (policy will be applied after stack deployment)"
+}
+
+# Function to apply bucket policy after IAM roles are created
+apply_bucket_policy() {
+    local bucket_name="$1"
+    local bot_name="$2"
     
-    # Add bucket policy to allow CodePipeline and CodeBuild access
+    print_header "Applying S3 Bucket Policy"
+    
+    local account_id=$(aws sts get-caller-identity --query Account --output text)
+    
     print_status "Setting bucket policy for CodePipeline and CodeBuild access"
     aws s3api put-bucket-policy \
         --bucket "$bucket_name" \
@@ -418,7 +385,7 @@ create_s3_bucket() {
                     \"Sid\": \"AllowCodePipelineServiceRole\",
                     \"Effect\": \"Allow\",
                     \"Principal\": {
-                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name_from_bucket}-codepipeline-role\"
+                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name}-codepipeline-role\"
                     },
                     \"Action\": [
                         \"s3:GetObject\",
@@ -431,7 +398,7 @@ create_s3_bucket() {
                     \"Sid\": \"AllowCodePipelineServiceRoleBucket\",
                     \"Effect\": \"Allow\",
                     \"Principal\": {
-                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name_from_bucket}-codepipeline-role\"
+                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name}-codepipeline-role\"
                     },
                     \"Action\": [
                         \"s3:ListBucket\",
@@ -444,7 +411,7 @@ create_s3_bucket() {
                     \"Sid\": \"AllowCodeBuildServiceRole\",
                     \"Effect\": \"Allow\",
                     \"Principal\": {
-                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name_from_bucket}-codebuild-role\"
+                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name}-codebuild-role\"
                     },
                     \"Action\": [
                         \"s3:GetObject\",
@@ -456,7 +423,7 @@ create_s3_bucket() {
                     \"Sid\": \"AllowCodeBuildServiceRoleBucket\",
                     \"Effect\": \"Allow\",
                     \"Principal\": {
-                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name_from_bucket}-codebuild-role\"
+                        \"AWS\": \"arn:aws:iam::${account_id}:role/${bot_name}-codebuild-role\"
                     },
                     \"Action\": [
                         \"s3:ListBucket\",
@@ -467,7 +434,7 @@ create_s3_bucket() {
             ]
         }"
     
-    print_success "S3 bucket '$bucket_name' created successfully"
+    print_success "Bucket policy applied successfully"
 }
 
 # Function to create source package
@@ -550,21 +517,17 @@ deploy_pipeline_stack() {
     local stack_name="$1"
     local region="$2"
     local bot_name="$3"
-    local app_stack_name="$4"
-    local telegram_token="$5"
-    local chat_id="$6"
-    local bedrock_model="$7"
-    local bucket_name="$8"
+    local telegram_token="$4"
+    local chat_id="$5"
+    local bucket_name="$6"
     
     print_header "Deploying Pipeline Stack"
     
     if [[ "$DRY_RUN" == "true" ]]; then
-        print_status "[DRY RUN] Would deploy pipeline stack: $stack_name"
+        print_status "[DRY RUN] Would deploy stack: $stack_name"
         print_status "Parameters:"
         print_status "  BotName: $bot_name"
-        print_status "  ApplicationStackName: $app_stack_name"
         print_status "  TelegramChatId: $chat_id"
-        print_status "  BedrockModelId: $bedrock_model"
         print_status "  ArtifactBucketName: $bucket_name"
         return 0
     fi
@@ -578,16 +541,14 @@ deploy_pipeline_stack() {
         --stack-name "$stack_name" \
         --parameter-overrides \
             "BotName=$bot_name" \
-            "ApplicationStackName=$app_stack_name" \
             "TelegramBotToken=$telegram_token" \
             "TelegramChatId=$chat_id" \
-            "BedrockModelId=$bedrock_model" \
             "ArtifactBucketName=$bucket_name" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$region" \
         --no-fail-on-empty-changeset
     
-    print_success "Pipeline stack deployed successfully"
+    print_success "Stack deployed successfully"
 }
 
 # Function to get bucket name from stack
@@ -657,27 +618,22 @@ show_deployment_results() {
 main() {
     # Default values
     local stack_name="$DEFAULT_STACK_NAME"
-    local app_stack_name="$DEFAULT_APP_STACK_NAME"
     local region="$DEFAULT_REGION"
     local bot_name="$DEFAULT_BOT_NAME"
     local telegram_token=""
     local chat_id=""
     local feeds_file="$DEFAULT_FEEDS_FILE"
-    local bedrock_model="amazon.nova-micro-v1:0"
     local bucket_name=""
     local dry_run="false"
     local cleanup_mode="false"
     local update_code_only="false"
+    local skip_confirmation="false"
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             -s|--stack-name)
                 stack_name="$2"
-                shift 2
-                ;;
-            -a|--app-stack)
-                app_stack_name="$2"
                 shift 2
                 ;;
             -r|--region)
@@ -700,10 +656,6 @@ main() {
                 feeds_file="$2"
                 shift 2
                 ;;
-            -m|--bedrock-model)
-                bedrock_model="$2"
-                shift 2
-                ;;
             --bucket)
                 bucket_name="$2"
                 shift 2
@@ -718,6 +670,10 @@ main() {
                 ;;
             --dry-run)
                 dry_run="true"
+                shift
+                ;;
+            -y|--yes)
+                skip_confirmation="true"
                 shift
                 ;;
             -h|--help)
@@ -744,19 +700,17 @@ main() {
     # Handle cleanup mode
     if [[ "$cleanup_mode" == "true" ]]; then
         print_header "Cleanup Mode"
-        echo "Pipeline Stack: $stack_name"
-        echo "App Stack: $app_stack_name"
+        echo "Stack: $stack_name"
         echo "Region: $region"
         echo "S3 Bucket: $bucket_name"
         
-        if [[ "$dry_run" == "false" ]]; then
+        if [[ "$dry_run" == "false" && "$skip_confirmation" == "false" ]]; then
             echo -e "\n${YELLOW}WARNING: This will delete ALL AWS resources!${NC}"
             echo -e "${YELLOW}Press Enter to continue or Ctrl+C to cancel...${NC}"
             read -r
         fi
         
         cleanup_aws_resources "$stack_name" "$region" "$bot_name" "$bucket_name"
-        cleanup_aws_resources "$app_stack_name" "$region" "$bot_name" "$bucket_name"
         return 0
     fi
     
@@ -778,7 +732,10 @@ main() {
         check_prerequisites
         validate_feeds_file "$feeds_file"
         create_source_package "$feeds_file"
-        upload_source_and_trigger "$bucket_name" "$region"
+        
+        # Get the pipeline name
+        local pipeline_name="$bot_name-pipeline"
+        upload_source_and_trigger "$bucket_name" "$region" "$pipeline_name"
         
         print_success "Code updated! Pipeline will deploy automatically."
         print_status "Monitor pipeline at: https://$region.console.aws.amazon.com/codesuite/codepipeline/pipelines"
@@ -800,31 +757,33 @@ main() {
     
     # Show deployment configuration
     print_header "Initial Deployment Configuration"
-    echo "Pipeline Stack: $stack_name"
-    echo "App Stack: $app_stack_name"
+    echo "Stack Name: $stack_name"
     echo "Region: $region"
     echo "Bot Name: $bot_name"
     echo "Chat ID: $chat_id"
     echo "Feeds File: $feeds_file"
-    echo "Bedrock Model: $bedrock_model"
     echo "S3 Bucket: $bucket_name"
     echo "Dry Run: $dry_run"
     
-    if [[ "$dry_run" == "false" ]]; then
+    if [[ "$dry_run" == "false" && "$skip_confirmation" == "false" ]]; then
         echo -e "\n${YELLOW}Press Enter to continue or Ctrl+C to cancel...${NC}"
         read -r
     fi
     
     # Execute deployment steps
     check_prerequisites
-    validate_bedrock_model "$bedrock_model" "$region"
     validate_feeds_file "$feeds_file"
     
-    # Create S3 bucket BEFORE deploying pipeline stack
-    # This ensures the bucket exists when CloudFormation validates the template
+    # Create S3 bucket first (without policy)
     create_s3_bucket "$bucket_name" "$region"
     
-    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$app_stack_name" "$telegram_token" "$chat_id" "$bedrock_model" "$bucket_name"
+    # Deploy stack (creates IAM roles)
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name"
+    
+    # Apply bucket policy now that IAM roles exist
+    apply_bucket_policy "$bucket_name" "$bot_name"
+    
+    # Create and upload source package
     create_source_package "$feeds_file"
     
     # Get the pipeline name from the stack

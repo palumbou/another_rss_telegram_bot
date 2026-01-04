@@ -54,10 +54,11 @@ Lo script automatizza i seguenti passaggi:
 | `--bot-name` | Nome bot per risorse | `another-rss-telegram-bot` | No |
 | `--telegram-token` | Token bot Telegram | - | **Sì** (iniziale) |
 | `--chat-id` | ID chat Telegram | - | **Sì** (iniziale) |
-| `--feeds` | URL feed RSS (separati da virgola) | Feed AWS | No |
+| `--feeds-file` | Percorso file feeds.json | Feed predefiniti | No |
 | `--bucket` | Nome bucket S3 | Auto-generato | No |
 | `--update-code` | Aggiorna solo codice | false | No |
 | `--cleanup` | Elimina tutte le risorse | false | No |
+| `--yes` | Salta prompt di conferma | false | No |
 | `--dry-run` | Simula senza eseguire | false | No |
 | `--help` | Mostra aiuto | - | No |
 
@@ -94,9 +95,17 @@ Vedi [FEEDS.IT.md](../FEEDS.IT.md) per il formato del file feed ed esempi.
   --dry-run
 ```
 
-#### 5. Pulizia
+#### 5. Salta Prompt di Conferma
 ```bash
-./scripts/deploy.sh --cleanup --region "eu-west-1"
+./scripts/deploy.sh \
+  --telegram-token "TUO_TOKEN" \
+  --chat-id "TUO_CHAT_ID" \
+  --yes
+```
+
+#### 6. Pulizia
+```bash
+./scripts/deploy.sh --cleanup --region "eu-west-1" --yes
 ```
 
 ### Come Ottenere i Parametri Richiesti

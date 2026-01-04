@@ -1,5 +1,7 @@
 # Kiro Development Prompt
 
+> **Lingue disponibili**: [English](KIRO-PROMPT.md) | [Italiano (corrente)](KIRO-PROMPT.it.md)
+
 ## Prompt Originale
 
 Questo progetto è stato sviluppato utilizzando Kiro AI assistant seguendo la metodologia spec-driven development.

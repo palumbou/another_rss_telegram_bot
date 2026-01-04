@@ -118,7 +118,7 @@ RIASSUNTO:"""
             )
 
     def bedrock_summarize(self, content: str, url: str) -> str | None:
-        """Generate summary using Meta Llama 3.2 1B Instruct via inference profile."""
+        """Generate summary using Amazon Nova Micro via inference profile."""
         if not self.bedrock_client:
             self.logger.warning("Bedrock client not available")
             return None
@@ -133,12 +133,13 @@ RIASSUNTO:"""
                 content_length=len(content),
             )
 
-            # Prepare request for Meta Llama via inference profile
+            # Prepare request for Amazon Nova Micro
             request_body = {
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": self.config.max_tokens,
-                "temperature": 0.3,
-                "top_p": 0.9
+                "messages": [{"role": "user", "content": [{"text": prompt}]}],
+                "inferenceConfig": {
+                    "max_new_tokens": self.config.max_tokens,
+                    "temperature": 0.3
+                }
             }
 
             response = self.bedrock_client.invoke_model(
@@ -150,22 +151,23 @@ RIASSUNTO:"""
 
             response_body = json.loads(response["body"].read())
             
-            # Llama returns output in this format
-            if "choices" in response_body and len(response_body["choices"]) > 0:
-                message = response_body["choices"][0].get("message", {})
-                summary_text = message.get("content", "")
-                
-                if summary_text:
-                    self.logger.info(
-                        "Successfully generated summary using Bedrock Llama",
-                        response_length=len(summary_text),
-                    )
-                    return summary_text.strip()
-                else:
-                    self.logger.warning("Empty content in Llama response")
-                    return None
+            # Nova returns output in this format
+            if "output" in response_body and "message" in response_body["output"]:
+                message = response_body["output"]["message"]
+                if "content" in message and len(message["content"]) > 0:
+                    summary_text = message["content"][0].get("text", "")
+                    
+                    if summary_text:
+                        self.logger.info(
+                            "Successfully generated summary using Bedrock Nova",
+                            response_length=len(summary_text),
+                        )
+                        return summary_text.strip()
+                    else:
+                        self.logger.warning("Empty content in Nova response")
+                        return None
             else:
-                self.logger.warning("No choices in Llama response")
+                self.logger.warning("Unexpected Nova response format")
                 return None
 
         except ClientError as e:
@@ -176,7 +178,7 @@ RIASSUNTO:"""
                 )
             elif error_code == "ValidationException":
                 self.logger.warning(
-                    f"Validation error with Llama: {e} - falling back to extractive summarization"
+                    f"Validation error with Nova: {e} - falling back to extractive summarization"
                 )
             else:
                 self.logger.error(f"Bedrock client error: {e}", error_code=error_code)

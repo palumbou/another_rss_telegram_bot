@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import boto3
@@ -107,8 +107,34 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             f"Total items found: {len(all_items)}", total_items=len(all_items)
         )
 
-        # Process items through the pipeline
+        # Filter items to only include those from the last 24 hours
+        now = datetime.now(UTC)
+        cutoff_time = now - timedelta(hours=24)
+        
+        filtered_items = []
         for item in all_items:
+            # Ensure published date is timezone-aware
+            item_published = item.published
+            if item_published.tzinfo is None:
+                item_published = item_published.replace(tzinfo=UTC)
+            
+            if item_published >= cutoff_time:
+                filtered_items.append(item)
+            else:
+                main_logger.debug(
+                    f"Skipping old item: {item.title}",
+                    item_title=item.title,
+                    published=item_published.isoformat()
+                )
+        
+        main_logger.info(
+            f"Filtered to {len(filtered_items)} items from last 24 hours",
+            total_items=len(all_items),
+            filtered_items=len(filtered_items)
+        )
+
+        # Process items through the pipeline
+        for item in filtered_items:
             try:
                 # Generate unique ID for deduplication
                 item_id = deduplicator.generate_item_id(item)

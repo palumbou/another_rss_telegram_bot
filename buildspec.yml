@@ -23,22 +23,20 @@ phases:
       - cp -r src build/
       - echo "Copying prompts..."
       - cp -r prompts build/
-      - echo "Creating deployment package..."
-      - cd build
-      - zip -r ../lambda-deployment-package.zip . -q
-      - cd ..
+      - echo "Copying feeds.json..."
+      - cp feeds.json build/
       - echo "Build completed on `date`"
       
   post_build:
     commands:
       - echo "Post-build phase started on `date`"
-      - ls -lh lambda-deployment-package.zip
+      - ls -lh build/
       - echo "Build successful!"
 
 artifacts:
   files:
-    - lambda-deployment-package.zip
-    - infrastructure/template.yaml
+    - '**/*'
+  base-directory: build
   name: BuildArtifact
 
 cache:

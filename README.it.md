@@ -11,12 +11,36 @@ Questo progetto è un **esperimento con Kiro AI** per esplorare lo sviluppo assi
 ### Caratteristiche Principali
 
 - **Monitoraggio RSS**: Controllo periodico di feed RSS configurabili
+- **Filtro 24 Ore**: Elabora solo item pubblicati nelle ultime 24 ore
 - **Deduplicazione**: Evita contenuti duplicati usando DynamoDB
-- **Riassunti AI**: Genera riassunti in italiano usando Amazon Bedrock con fallback
+- **Riassunti AI**: Genera riassunti in italiano usando Amazon Bedrock Nova Micro con fallback
 - **Integrazione Telegram**: Invio automatico di messaggi formattati
 - **Gestione Errori**: Gestione robusta degli errori con Dead Letter Queue
 - **Logging Strutturato**: Sistema di logging completo per debugging
 - **Monitoraggio**: Dashboard CloudWatch e metriche personalizzate
+- **Pipeline CI/CD**: Deployment automatizzato con AWS CodePipeline e S3
+
+### Modello AI
+
+Il bot utilizza **Amazon Nova Micro** (`eu.amazon.nova-micro-v1:0`) per generare riassunti in italiano. Questo modello è stato scelto perché:
+- Economico per riassunti ad alto volume
+- Tempi di risposta rapidi (< 1 secondo per riassunto)
+- Buona qualità nelle traduzioni italiane
+- Disponibile tramite profilo di inferenza cross-region in EU
+
+**Per usare un modello diverso**, è necessario modificare `src/summarize.py` per adattarlo al formato API del modello. Vedi la sezione [Personalizzazione](#personalizzazione) sotto.
+
+### Esempio di Output
+
+Ecco come appaiono i messaggi del bot su Telegram:
+
+![Esempio Messaggi Telegram](docs/images/telegram-messages-example.png)
+
+Ogni messaggio include:
+- Un titolo conciso in italiano
+- Tre punti elenco con le informazioni chiave
+- Una sezione "Perché conta:" che spiega la rilevanza
+- Link alla fonte dell'articolo originale
 
 ## Architettura
 
@@ -27,7 +51,7 @@ Sistema serverless su AWS con i seguenti componenti:
 - **DynamoDB**: Storage per deduplicazione con TTL di 90 giorni
 - **EventBridge Scheduler**: Esecuzione programmata giornaliera
 - **Secrets Manager**: Storage sicuro per token Telegram
-- **Amazon Bedrock**: Generazione riassunti AI con Claude 3 Haiku
+- **Amazon Bedrock**: Generazione riassunti AI con modello Nova Micro
 - **SQS Dead Letter Queue**: Gestione errori e retry
 - **CloudWatch**: Logging, metriche e dashboard di monitoraggio
 - **CodePipeline**: Build e deployment automatizzati (CI/CD)
@@ -53,7 +77,7 @@ Sistema serverless su AWS con i seguenti componenti:
 
 ### Deployment
 
-Il sistema utilizza AWS CodePipeline per il deployment automatizzato. Vedi [docs/infrastructure.it.md](docs/infrastructure.it.md) per le istruzioni complete di setup.
+Il sistema utilizza uno stack CloudFormation unificato con AWS CodePipeline per il deployment automatizzato. Un singolo stack contiene tutte le risorse (Lambda, DynamoDB, EventBridge, CodePipeline, CodeBuild, ecc.). Vedi [docs/INFRASTRUCTURE.it.md](docs/INFRASTRUCTURE.it.md) per le istruzioni complete di setup.
 
 ## Configurazione
 
@@ -112,15 +136,54 @@ Vedi [FEEDS.IT.md](FEEDS.it.md) per istruzioni dettagliate ed esempi.
   --telegram-token "TUO_BOT_TOKEN" \
   --chat-id "TUO_CHAT_ID" \
   --feeds-file /percorso/al/mio-feeds.json
+
+# Salta prompt di conferma
+./scripts/deploy.sh \
+  --telegram-token "TUO_BOT_TOKEN" \
+  --chat-id "TUO_CHAT_ID" \
+  --yes
 ```
 
-Per istruzioni complete di deployment, vedi [docs/INFRASTRUCTURE.it.md](docs/INFRASTRUCTURE.IT.md).
+Per istruzioni complete di deployment, vedi [docs/INFRASTRUCTURE.it.md](docs/INFRASTRUCTURE.it.md).
+
+## Personalizzazione
+
+### Cambiare il Modello AI
+
+Il bot è configurato per usare Amazon Nova Micro. Per utilizzare un modello Bedrock diverso:
+
+1. **Aggiorna l'ID del modello** in `infrastructure/pipeline-template.yaml`:
+   ```yaml
+   BEDROCK_MODEL_ID: 'tuo-model-id-qui'
+   ```
+
+2. **Modifica il formato API** in `src/summarize.py` nel metodo `bedrock_summarize()`:
+   - Modelli diversi usano formati richiesta/risposta diversi
+   - Consulta la [documentazione AWS Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters.html) per il formato del tuo modello
+   - Aggiorna la struttura `request_body`
+   - Aggiorna la logica di parsing della risposta
+
+3. **Esempio per modelli Claude**:
+   ```python
+   request_body = {
+       "anthropic_version": "bedrock-2023-05-31",
+       "messages": [{"role": "user", "content": prompt}],
+       "max_tokens": self.config.max_tokens,
+       "temperature": 0.3
+   }
+   # Risposta: response_body["content"][0]["text"]
+   ```
+
+4. **Rideploya** l'applicazione:
+   ```bash
+   ./scripts/deploy.sh --update-code --region eu-west-1
+   ```
 
 ## Documentazione
 
 - [Configurazione Feed RSS](FEEDS.it.md) - Come configurare e personalizzare i feed RSS
 - [Guida Infrastruttura](docs/INFRASTRUCTURE.it.md) - Setup completo dell'infrastruttura
-- [Processo di Sviluppo Kiro](docs/kiro-prompt.md) - Metodologia di sviluppo assistito da AI
+- [Processo di Sviluppo Kiro](docs/KIRO-PROMPT.it.md) - Metodologia di sviluppo assistito da AI
 - [Prompts](prompts/README.it.md) - Template dei prompt AI
 - [Script di Deployment](scripts/README.it.md) - Documentazione automazione deployment
 

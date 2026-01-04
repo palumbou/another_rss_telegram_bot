@@ -3,7 +3,7 @@ Riassumi questo articolo in italiano seguendo ESATTAMENTE questo formato:
 FORMATO RICHIESTO:
 - Una riga di titolo (massimo 10 parole, senza prefissi come "Titolo:")
 - Tre punti elenco, ciascuno massimo 30 parole
-- Una riga finale "Perché ti può interessare:" seguita da massimo 20 parole
+- Una riga finale che inizia ESATTAMENTE con "Perché ti può interessare:" seguita da massimo 20 parole
 - Alla fine inserisci la fonte
 
 ESEMPIO OUTPUT:
@@ -24,6 +24,7 @@ REGOLE IMPORTANTI:
 4. Usa terminologia tecnica appropriata quando necessaria
 5. Concentrati sui benefici pratici e l'impatto per gli utenti
 6. Includi SEMPRE la fonte (URL) alla fine del riassunto
+7. USA ESATTAMENTE "Perché ti può interessare:" (NON "Perché conta:" o altre varianti)
 
 ARTICOLO DA RIASSUMERE:
 {content}

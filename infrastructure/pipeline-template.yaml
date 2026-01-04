@@ -7,11 +7,6 @@ Parameters:
     Default: 'another-rss-telegram-bot'
     Description: 'Name for the bot (used in resource naming)'
   
-  ApplicationStackName:
-    Type: String
-    Default: 'another-rss-telegram-bot-app'
-    Description: 'Name of the application CloudFormation stack'
-  
   TelegramBotToken:
     Type: String
     Description: 'Telegram bot token'
@@ -21,16 +16,314 @@ Parameters:
     Type: String
     Description: 'Telegram chat ID'
   
-  BedrockModelId:
-    Type: String
-    Default: 'amazon.nova-micro-v1:0'
-    Description: 'Amazon Bedrock model ID for summarization'
-  
   ArtifactBucketName:
     Type: String
     Description: 'Name of the S3 bucket for artifacts'
+  
+  # Lambda configuration
+  LambdaTimeout:
+    Type: Number
+    Default: 300
+    MinValue: 60
+    MaxValue: 900
+    Description: 'Lambda function timeout in seconds'
+  
+  LambdaMemorySize:
+    Type: Number
+    Default: 512
+    AllowedValues: [128, 256, 512, 1024, 2048, 3008]
+    Description: 'Lambda function memory size in MB'
+  
+  # Schedule configuration
+  ScheduleExpression:
+    Type: String
+    Default: 'cron(0 9 * * ? *)'
+    Description: 'EventBridge schedule expression (default: daily at 9:00 AM UTC)'
+  
+  ScheduleTimezone:
+    Type: String
+    Default: 'Europe/Rome'
+    Description: 'Timezone for the schedule'
+  
+  # Infrastructure configuration
+  DynamoDBTTLDays:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    MaxValue: 365
+    Description: 'DynamoDB item TTL in days'
+  
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: 'CloudWatch Logs retention period in days'
 
 Resources:
+  # ============================================================================
+  # APPLICATION RESOURCES
+  # ============================================================================
+  
+  # Secrets Manager secret for Telegram bot token
+  TelegramSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${BotName}-telegram-token'
+      Description: 'Telegram bot token for RSS bot'
+      SecretString: !Sub '{"token":"${TelegramBotToken}"}'
+      Tags:
+        - Key: Application
+          Value: !Ref BotName
+        - Key: Component
+          Value: Security
+  
+  # DynamoDB table for deduplication with TTL
+  DeduplicationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${BotName}-dedup'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: item_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: item_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: !Ref BotName
+        - Key: Component
+          Value: Deduplication
+  
+  # SQS Dead Letter Queue for error handling
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${BotName}-dlq'
+      MessageRetentionPeriod: 1209600  # 14 days
+      VisibilityTimeout: 60
+      Tags:
+        - Key: Application
+          Value: !Ref BotName
+        - Key: Component
+          Value: ErrorHandling
+  
+  # CloudWatch Log Group with retention policy
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${BotName}-processor'
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Application
+          Value: !Ref BotName
+        - Key: Component
+          Value: Logging
+  
+  # IAM role for Lambda function with minimal privileges
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${BotName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt DeduplicationTable.Arn
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref TelegramSecret
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': 'RSS-Telegram-Bot'
+        - PolicyName: SQSDeadLetterQueue
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt DeadLetterQueue.Arn
+      Tags:
+        - Key: Application
+          Value: !Ref BotName
+        - Key: Component
+          Value: IAM
+  
+  # Lambda function with inline placeholder code
+  ProcessorFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaLogGroup
+    Properties:
+      FunctionName: !Sub '${BotName}-processor'
+      Runtime: python3.12
+      Handler: src.lambda_handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': 'Placeholder - waiting for pipeline deployment'
+              }
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      Environment:
+        Variables:
+          TELEGRAM_SECRET_NAME: !Ref TelegramSecret
+          TELEGRAM_CHAT_ID: !Ref TelegramChatId
+          DYNAMODB_TABLE: !Ref DeduplicationTable
+          BEDROCK_MODEL_ID: 'eu.amazon.nova-micro-v1:0'
+          CURRENT_AWS_REGION: !Ref AWS::Region
+          LOG_LEVEL: INFO
+      DeadLetterConfig:
+        TargetArn: !GetAtt DeadLetterQueue.Arn
+      Tags:
+        - Key: Application
+          Value: !Ref BotName
+        - Key: Component
+          Value: Processor
+  
+  # EventBridge Scheduler for daily execution
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${BotName}-scheduler-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt ProcessorFunction.Arn
+      Tags:
+        - Key: Application
+          Value: !Ref BotName
+        - Key: Component
+          Value: Scheduler
+  
+  ProcessorSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub '${BotName}-daily-schedule'
+      Description: 'Daily execution schedule for RSS Telegram Bot'
+      State: ENABLED
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: !Ref ScheduleTimezone
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn: !GetAtt ProcessorFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: !Sub |
+          {
+            "source": "eventbridge-scheduler",
+            "schedule_name": "${BotName}-daily-schedule",
+            "execution_time": "<aws.scheduler.execution-time>"
+          }
+  
+  # CloudWatch Dashboard for monitoring
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${BotName}-monitoring'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "RSS-Telegram-Bot", "ExecutionSuccess", "Status", "Success" ],
+                  [ ".", "ExecutionFailure", ".", "Failure" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Execution Success/Failure",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "RSS-Telegram-Bot", "FeedsProcessed" ],
+                  [ ".", "ItemsFound" ],
+                  [ ".", "ItemsSummarized" ],
+                  [ ".", "MessagesSent" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Processing Metrics",
+                "period": 300
+              }
+            }
+          ]
+        }
+  
+  # ============================================================================
+  # CI/CD PIPELINE RESOURCES
+  # ============================================================================
+  
   # S3 Bucket for pipeline artifacts
   # Note: Bucket name is passed as parameter and created externally before stack deployment
   # This avoids circular dependency issues with CloudFormation early validation
@@ -106,28 +399,14 @@ Resources:
         
         - Name: Deploy
           Actions:
-            - Name: DeployAction
+            - Name: DeployLambdaCode
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
-                Provider: CloudFormation
+                Provider: Lambda
                 Version: '1'
               Configuration:
-                ActionMode: CREATE_UPDATE
-                StackName: !Ref ApplicationStackName
-                Capabilities: CAPABILITY_NAMED_IAM
-                TemplatePath: BuildOutput::infrastructure/template.yaml
-                RoleArn: !GetAtt CloudFormationRole.Arn
-                ParameterOverrides: !Sub |
-                  {
-                    "BotName": "${BotName}",
-                    "TelegramBotToken": "${TelegramBotToken}",
-                    "TelegramChatId": "${TelegramChatId}",
-                    "TelegramSecretName": "${BotName}-telegram-token",
-                    "LambdaS3Bucket": "${ArtifactBucketName}",
-                    "LambdaS3Key": "lambda-deployment-package.zip",
-                    "BedrockModelId": "${BedrockModelId}"
-                  }
+                FunctionName: !Ref ProcessorFunction
               InputArtifacts:
                 - Name: BuildOutput
       Tags:
@@ -252,6 +531,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:ListBucket
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketLocation
                 Resource:
                   - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
               - Effect: Allow
@@ -262,65 +543,69 @@ Resources:
                   - !GetAtt BuildProject.Arn
               - Effect: Allow
                 Action:
-                  - cloudformation:CreateStack
-                  - cloudformation:UpdateStack
-                  - cloudformation:DescribeStacks
-                  - cloudformation:DescribeStackEvents
-                  - cloudformation:DescribeChangeSet
-                  - cloudformation:CreateChangeSet
-                  - cloudformation:ExecuteChangeSet
-                  - cloudformation:DeleteChangeSet
+                  - lambda:UpdateFunctionCode
+                  - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
+                  - lambda:PublishVersion
                 Resource:
-                  - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApplicationStackName}/*'
+                  - !GetAtt ProcessorFunction.Arn
               - Effect: Allow
                 Action:
-                  - iam:PassRole
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
                 Resource:
-                  - !GetAtt CloudFormationRole.Arn
-              - Effect: Allow
-                Action:
-                  - events:PutRule
-                  - events:PutTargets
-                  - events:DescribeRule
-                Resource:
-                  - !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${BotName}-pipeline-trigger'
-
-  # IAM Role for CloudFormation
-  CloudFormationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${BotName}-cloudformation-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/PowerUserAccess
-      Policies:
-        - PolicyName: IAMPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - iam:CreateRole
-                  - iam:DeleteRole
-                  - iam:GetRole
-                  - iam:PassRole
-                  - iam:AttachRolePolicy
-                  - iam:DetachRolePolicy
-                  - iam:PutRolePolicy
-                  - iam:DeleteRolePolicy
-                  - iam:GetRolePolicy
-                  - iam:TagRole
-                  - iam:UntagRole
-                Resource:
-                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${BotName}-*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/${BotName}-pipeline:*'
 
 Outputs:
+  # Application Resources
+  LambdaFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref ProcessorFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunction'
+  
+  LambdaFunctionArn:
+    Description: 'ARN of the Lambda function'
+    Value: !GetAtt ProcessorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+  
+  DynamoDBTableName:
+    Description: 'Name of the DynamoDB deduplication table'
+    Value: !Ref DeduplicationTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTable'
+  
+  DeadLetterQueueUrl:
+    Description: 'URL of the SQS Dead Letter Queue'
+    Value: !Ref DeadLetterQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-DeadLetterQueue'
+  
+  SecretsManagerSecretName:
+    Description: 'Name of the Secrets Manager secret containing Telegram bot token'
+    Value: !Ref TelegramSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-TelegramSecret'
+  
+  CloudWatchLogGroup:
+    Description: 'CloudWatch Log Group for Lambda function'
+    Value: !Ref LambdaLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroup'
+  
+  ScheduleName:
+    Description: 'Name of the EventBridge schedule'
+    Value: !Ref ProcessorSchedule
+    Export:
+      Name: !Sub '${AWS::StackName}-Schedule'
+  
+  MonitoringDashboardUrl:
+    Description: 'URL to the CloudWatch monitoring dashboard'
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${BotName}-monitoring'
+  
+  # Pipeline Resources
   PipelineName:
     Description: 'Name of the CodePipeline'
     Value: !Ref Pipeline

@@ -9,35 +9,35 @@ Questo documento descrive l'infrastruttura AWS completa per Another RSS Telegram
 ## Diagramma Architettura
 
 ```
-┌─────────────────────────────────────────────────┐
-│              Script Deploy                       │
-│         (carica sorgente su S3)                  │
-└──────────────────┬──────────────────────────────┘
+┌───────────────────────────────────────────────────┐
+│              Script Deploy                        │
+│         (carica sorgente su S3)                   │
+└──────────────────┬────────────────────────────────┘
                    │
                    ▼
-┌─────────────────────────────────────────────────┐
-│           Bucket S3 Artifact                     │
-│         (source/source.zip)                      │
-└──────────────────┬──────────────────────────────┘
+┌───────────────────────────────────────────────────┐
+│           Bucket S3 Artifact                      │
+│         (source/source.zip)                       │
+└──────────────────┬────────────────────────────────┘
                    │ (trigger evento S3)
                    ▼
-┌─────────────────────────────────────────────────┐
-│           AWS CodePipeline                       │
-├─────────────────────────────────────────────────┤
-│  Source Stage  →  Build Stage  →  Deploy Stage  │
+┌───────────────────────────────────────────────────┐
+│           AWS CodePipeline                        │
+├───────────────────────────────────────────────────┤
+│  Source Stage  →  Build Stage  →  Deploy Stage    │
 │     (S3)          (CodeBuild)     (CloudFormation)│
-└──────────────────────┬──────────────────────────┘
+└──────────────────────┬────────────────────────────┘
                        │
                        ▼
-┌──────────────────────────────────────────────────┐
+┌───────────────────────────────────────────────────┐
 │         Infrastruttura Applicazione               │
-├──────────────────────────────────────────────────┤
-│  EventBridge  →  Lambda  →  DynamoDB             │
+├───────────────────────────────────────────────────┤
+│  EventBridge  →  Lambda  →  DynamoDB              │
 │                    ↓                              │
 │              Bedrock + Telegram                   │
 │                    ↓                              │
 │              CloudWatch + SQS DLQ                 │
-└──────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────┘
 ```
 
 ## Componenti
@@ -254,7 +254,3 @@ aws secretsmanager delete-secret \
   --secret-id {secret-name} \
   --recovery-window-in-days 7
 ```
-
----
-
-*Per domande o problemi, consulta il [README.it.md](../README.it.md) principale*

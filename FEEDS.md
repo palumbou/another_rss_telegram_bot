@@ -181,7 +181,3 @@ If deployment fails with JSON validation error:
   ]
 }
 ```
-
----
-
-*For more information, see the main [README.md](README.md)*
