@@ -20,15 +20,21 @@ Questo progetto è un **esperimento con Kiro AI** per esplorare lo sviluppo assi
 - **Monitoraggio**: Dashboard CloudWatch e metriche personalizzate
 - **Pipeline CI/CD**: Deployment automatizzato con AWS CodePipeline e S3
 
-### Modello AI
+### Modelli AI
 
-Il bot utilizza **Amazon Nova Micro** (`eu.amazon.nova-micro-v1:0`) per generare riassunti in italiano. Questo modello è stato scelto perché:
+Il bot supporta diversi modelli Amazon Bedrock per generare riassunti in italiano:
+
+**Default: Amazon Nova Micro** (`amazon.nova-micro-v1:0`)
 - Economico per riassunti ad alto volume
 - Tempi di risposta rapidi (< 1 secondo per riassunto)
 - Buona qualità nelle traduzioni italiane
-- Disponibile tramite profilo di inferenza cross-region in EU
+- Disponibile tramite profilo di inferenza cross-region
 
-**Per usare un modello diverso**, è necessario modificare `src/summarize.py` per adattarlo al formato API del modello. Vedi la sezione [Personalizzazione](#personalizzazione) sotto.
+**Alternativa: Llama 3.2 3B Instruct** (`us.meta.llama3-2-3b-instruct-v1:0`)
+- Eccellente per riassunti e traduzioni
+- Migliore nel seguire le istruzioni
+- Qualità italiana superiore
+- Costo leggermente più alto ma risultati migliori
 
 ### Esempio di Output
 
@@ -150,39 +156,56 @@ Per istruzioni complete di deployment, vedi [docs/INFRASTRUCTURE.it.md](docs/INF
 
 ### Cambiare il Modello AI
 
-Il bot è configurato per usare Amazon Nova Micro. Per utilizzare un modello Bedrock diverso:
+Il bot supporta Amazon Nova Micro e Llama 3.2 3B nativamente. Per cambiare modello:
 
-1. **Aggiorna l'ID del modello** in `infrastructure/pipeline-template.yaml`:
-   ```yaml
-   BEDROCK_MODEL_ID: 'tuo-model-id-qui'
-   ```
+**Opzione 1: Durante il Deployment**
+```bash
+./scripts/deploy.sh \
+  --telegram-token "TUO_BOT_TOKEN" \
+  --chat-id "TUO_CHAT_ID" \
+  --bedrock-model "us.meta.llama3-2-3b-instruct-v1:0"
+```
 
-2. **Modifica il formato API** in `src/summarize.py` nel metodo `bedrock_summarize()`:
-   - Modelli diversi usano formati richiesta/risposta diversi
-   - Consulta la [documentazione AWS Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters.html) per il formato del tuo modello
-   - Aggiorna la struttura `request_body`
-   - Aggiorna la logica di parsing della risposta
+**Opzione 2: Aggiorna Deployment Esistente**
+```bash
+aws lambda update-function-configuration \
+  --function-name another-rss-telegram-bot-processor \
+  --environment Variables={BEDROCK_MODEL_ID=us.meta.llama3-2-3b-instruct-v1:0} \
+  --region eu-west-1
+```
 
-3. **Esempio per modelli Claude**:
-   ```python
-   request_body = {
-       "anthropic_version": "bedrock-2023-05-31",
-       "messages": [{"role": "user", "content": prompt}],
-       "max_tokens": self.config.max_tokens,
-       "temperature": 0.3
-   }
-   # Risposta: response_body["content"][0]["text"]
-   ```
+**Opzione 3: Modifica Template Infrastruttura**
 
-4. **Rideploya** l'applicazione:
-   ```bash
-   ./scripts/deploy.sh --update-code --region eu-west-1
-   ```
+Modifica `infrastructure/template.yaml`:
+```yaml
+Parameters:
+  BedrockModelId:
+    Type: String
+    Default: 'us.meta.llama3-2-3b-instruct-v1:0'  # Cambia qui
+```
+
+Poi rideploya:
+```bash
+./scripts/deploy.sh --update-code --region eu-west-1
+```
+
+**Test Modelli in Locale**
+```bash
+# Test con Nova Micro (default)
+python test_summarizer.py
+
+# Test con Llama 3.2 3B
+python test_summarizer.py us.meta.llama3-2-3b-instruct-v1:0
+```
+
+Per confronto dettagliato dei modelli, configurazione e aggiunta di altri modelli, vedi la [Guida Modelli AI](docs/MODELS.it.md).
 
 ## Documentazione
 
 - [Configurazione Feed RSS](FEEDS.it.md) - Come configurare e personalizzare i feed RSS
 - [Guida Infrastruttura](docs/INFRASTRUCTURE.it.md) - Setup completo dell'infrastruttura
+- [Guida Modelli AI](docs/MODELS.it.md) - Come configurare e cambiare tra modelli AI (Nova, Llama, ecc.)
+- [Guida Test Modelli](docs/TEST-MODELS.it.md) - Come testare i diversi modelli AI
 - [Processo di Sviluppo Kiro](docs/KIRO-PROMPT.it.md) - Metodologia di sviluppo assistito da AI
 - [Prompts](prompts/README.it.md) - Template dei prompt AI
 - [Script di Deployment](scripts/README.it.md) - Documentazione automazione deployment

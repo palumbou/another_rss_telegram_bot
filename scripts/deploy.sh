@@ -63,6 +63,7 @@ OPTIONS:
     -t, --telegram-token TOKEN      Telegram bot token (required for initial deploy)
     -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
     -f, --feeds-file FILE           Path to feeds.json file (optional, uses default if not provided)
+    -m, --bedrock-model MODEL_ID    Bedrock model ID (optional, default: amazon.nova-micro-v1:0)
     --bucket BUCKET_NAME            S3 bucket for artifacts (optional, auto-generated if not provided)
     --cleanup                       Delete all AWS resources created by this bot
     --update-code                   Update only the source code (trigger pipeline)
@@ -77,8 +78,12 @@ PREREQUISITES:
     - zip command available
 
 EXAMPLES:
-    # Initial deployment (creates pipeline with default feeds)
+    # Initial deployment (creates pipeline with default feeds and Nova Micro model)
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890"
+    
+    # Initial deployment with Llama 3.2 3B model
+    $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
+       --bedrock-model "us.meta.llama3-2-3b-instruct-v1:0"
     
     # Initial deployment with custom feeds file
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
@@ -520,6 +525,7 @@ deploy_pipeline_stack() {
     local telegram_token="$4"
     local chat_id="$5"
     local bucket_name="$6"
+    local bedrock_model="$7"
     
     print_header "Deploying Pipeline Stack"
     
@@ -529,21 +535,27 @@ deploy_pipeline_stack() {
         print_status "  BotName: $bot_name"
         print_status "  TelegramChatId: $chat_id"
         print_status "  ArtifactBucketName: $bucket_name"
+        print_status "  BedrockModelId: $bedrock_model"
         return 0
     fi
     
     print_status "Deploying stack: $stack_name"
     print_status "Template: $TEMPLATE_FILE"
     print_status "Region: $region"
+    print_status "Bedrock Model: $bedrock_model"
+    
+    # Build parameter overrides
+    local params="BotName=$bot_name TelegramBotToken=$telegram_token TelegramChatId=$chat_id ArtifactBucketName=$bucket_name"
+    
+    # Add BedrockModelId if provided
+    if [[ -n "$bedrock_model" ]]; then
+        params="$params BedrockModelId=$bedrock_model"
+    fi
     
     aws cloudformation deploy \
         --template-file "$TEMPLATE_FILE" \
         --stack-name "$stack_name" \
-        --parameter-overrides \
-            "BotName=$bot_name" \
-            "TelegramBotToken=$telegram_token" \
-            "TelegramChatId=$chat_id" \
-            "ArtifactBucketName=$bucket_name" \
+        --parameter-overrides $params \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$region" \
         --no-fail-on-empty-changeset
@@ -624,6 +636,7 @@ main() {
     local chat_id=""
     local feeds_file="$DEFAULT_FEEDS_FILE"
     local bucket_name=""
+    local bedrock_model=""
     local dry_run="false"
     local cleanup_mode="false"
     local update_code_only="false"
@@ -654,6 +667,10 @@ main() {
                 ;;
             -f|--feeds-file)
                 feeds_file="$2"
+                shift 2
+                ;;
+            -m|--bedrock-model)
+                bedrock_model="$2"
                 shift 2
                 ;;
             --bucket)
@@ -763,6 +780,11 @@ main() {
     echo "Chat ID: $chat_id"
     echo "Feeds File: $feeds_file"
     echo "S3 Bucket: $bucket_name"
+    if [[ -n "$bedrock_model" ]]; then
+        echo "Bedrock Model: $bedrock_model"
+    else
+        echo "Bedrock Model: amazon.nova-micro-v1:0 (default)"
+    fi
     echo "Dry Run: $dry_run"
     
     if [[ "$dry_run" == "false" && "$skip_confirmation" == "false" ]]; then
@@ -778,7 +800,7 @@ main() {
     create_s3_bucket "$bucket_name" "$region"
     
     # Deploy stack (creates IAM roles)
-    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name"
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name" "$bedrock_model"
     
     # Apply bucket policy now that IAM roles exist
     apply_bucket_policy "$bucket_name" "$bot_name"

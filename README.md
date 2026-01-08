@@ -20,15 +20,21 @@ This project is a **Kiro AI experiment** exploring AI-assisted development from 
 - **Monitoring**: CloudWatch dashboard and custom metrics
 - **CI/CD Pipeline**: Automated deployment with AWS CodePipeline and S3
 
-### AI Model
+### AI Models
 
-The bot uses **Amazon Nova Micro** (`eu.amazon.nova-micro-v1:0`) for generating Italian summaries. This model was chosen because:
+The bot supports multiple Amazon Bedrock models for generating Italian summaries:
+
+**Default: Amazon Nova Micro** (`amazon.nova-micro-v1:0`)
 - Cost-effective for high-volume summarization
 - Fast response times (< 1 second per summary)
 - Good quality Italian translations
-- Available via cross-region inference profile in EU
+- Available via cross-region inference profile
 
-**To use a different model**, you need to modify `src/summarize.py` to match the model's API format. See the [Customization](#customization) section below.
+**Alternative: Llama 3.2 3B Instruct** (`us.meta.llama3-2-3b-instruct-v1:0`)
+- Excellent for summaries and translations
+- Better instruction following
+- Superior Italian quality
+- Slightly higher cost but better results
 
 ### Example Output
 
@@ -150,39 +156,56 @@ For complete deployment instructions, see [docs/INFRASTRUCTURE.md](docs/INFRASTR
 
 ### Changing the AI Model
 
-The bot is configured to use Amazon Nova Micro. To use a different Bedrock model:
+The bot supports Amazon Nova Micro and Llama 3.2 3B out of the box. To switch models:
 
-1. **Update the model ID** in `infrastructure/pipeline-template.yaml`:
-   ```yaml
-   BEDROCK_MODEL_ID: 'your-model-id-here'
-   ```
+**Option 1: During Deployment**
+```bash
+./scripts/deploy.sh \
+  --telegram-token "YOUR_BOT_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --bedrock-model "us.meta.llama3-2-3b-instruct-v1:0"
+```
 
-2. **Modify the API format** in `src/summarize.py` in the `bedrock_summarize()` method:
-   - Different models use different request/response formats
-   - Consult the [AWS Bedrock documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters.html) for your model's format
-   - Update the `request_body` structure
-   - Update the response parsing logic
+**Option 2: Update Existing Deployment**
+```bash
+aws lambda update-function-configuration \
+  --function-name another-rss-telegram-bot-processor \
+  --environment Variables={BEDROCK_MODEL_ID=us.meta.llama3-2-3b-instruct-v1:0} \
+  --region eu-west-1
+```
 
-3. **Example for Claude models**:
-   ```python
-   request_body = {
-       "anthropic_version": "bedrock-2023-05-31",
-       "messages": [{"role": "user", "content": prompt}],
-       "max_tokens": self.config.max_tokens,
-       "temperature": 0.3
-   }
-   # Response: response_body["content"][0]["text"]
-   ```
+**Option 3: Modify Infrastructure Template**
 
-4. **Redeploy** the application:
-   ```bash
-   ./scripts/deploy.sh --update-code --region eu-west-1
-   ```
+Edit `infrastructure/template.yaml`:
+```yaml
+Parameters:
+  BedrockModelId:
+    Type: String
+    Default: 'us.meta.llama3-2-3b-instruct-v1:0'  # Change here
+```
+
+Then redeploy:
+```bash
+./scripts/deploy.sh --update-code --region eu-west-1
+```
+
+**Testing Models Locally**
+```bash
+# Test with Nova Micro (default)
+python test_summarizer.py
+
+# Test with Llama 3.2 3B
+python test_summarizer.py us.meta.llama3-2-3b-instruct-v1:0
+```
+
+For detailed model comparison, configuration, and adding other models, see the [AI Models Guide](docs/MODELS.md).
 
 ## Documentation
 
 - [RSS Feeds Configuration](FEEDS.md) - How to configure and customize RSS feeds
 - [Infrastructure Guide](docs/INFRASTRUCTURE.md) - Complete infrastructure setup
+- [AI Models Guide](docs/MODELS.md) - How to configure and switch between AI models (Nova, Llama, etc.)
+- [Model Testing Guide](docs/TEST-MODELS.md) - How to test different AI models
 - [Kiro Development Process](docs/KIRO-PROMPT.md) - AI-assisted development methodology
 - [Prompts](prompts/README.md) - AI prompt templates
 - [Deployment Scripts](scripts/README.md) - Deployment automation documentation

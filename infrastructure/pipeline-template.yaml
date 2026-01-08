@@ -45,6 +45,12 @@ Parameters:
     Default: 'Europe/Rome'
     Description: 'Timezone for the schedule'
   
+  # Bedrock configuration
+  BedrockModelId:
+    Type: String
+    Default: 'amazon.nova-micro-v1:0'
+    Description: 'Amazon Bedrock model ID for AI summarization (e.g., amazon.nova-micro-v1:0 or us.meta.llama3-2-3b-instruct-v1:0)'
+  
   # Infrastructure configuration
   DynamoDBTTLDays:
     Type: Number
@@ -164,7 +170,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: '*'
+                Resource: 
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-micro-v1:0'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/us.meta.llama3-2-3b-instruct-v1:0'
+                  - !Sub 'arn:aws:bedrock:*::foundation-model/*'
         - PolicyName: CloudWatchMetrics
           PolicyDocument:
             Version: '2012-10-17'
@@ -213,7 +222,7 @@ Resources:
           TELEGRAM_SECRET_NAME: !Ref TelegramSecret
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
           DYNAMODB_TABLE: !Ref DeduplicationTable
-          BEDROCK_MODEL_ID: 'eu.amazon.nova-micro-v1:0'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           CURRENT_AWS_REGION: !Ref AWS::Region
           LOG_LEVEL: INFO
       DeadLetterConfig:

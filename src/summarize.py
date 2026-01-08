@@ -53,14 +53,35 @@ class Summarizer:
             except Exception as e:
                 self.logger.warning(f"Failed to load template file: {e}")
         
-        # Fallback to default template
+        # Fallback to default template (matches bedrock_summary_template.txt)
         return """Riassumi questo articolo in italiano seguendo ESATTAMENTE questo formato:
 
 FORMATO RICHIESTO:
 - Una riga di titolo (massimo 10 parole, senza prefissi come "Titolo:")
 - Tre punti elenco, ciascuno massimo 30 parole
-- Una riga finale "Perché ti può interessare:" seguita da massimo 20 parole
+- Una riga finale che inizia ESATTAMENTE con "Perché ti può interessare:" seguita da massimo 20 parole
 - Alla fine inserisci la fonte
+
+ESEMPIO OUTPUT:
+AWS lancia nuovo servizio di machine learning
+
+• Servizio completamente gestito per modelli di deep learning
+• Integrazione nativa con S3 e altri servizi AWS esistenti  
+• Pricing pay-per-use senza costi fissi o minimi
+
+Perché ti può interessare: Democratizza l'accesso al machine learning per sviluppatori senza esperienza specifica in AI.
+
+Fonte: https://aws.amazon.com/blogs/aws/example-article
+
+REGOLE CRITICHE:
+1. Usa SOLO informazioni presenti nell'articolo originale
+2. Non inventare dettagli, date o informazioni non menzionate
+3. Mantieni il tono professionale ma accessibile
+4. Usa terminologia tecnica appropriata quando necessaria
+5. Concentrati sui benefici pratici e l'impatto per gli utenti
+6. Includi SEMPRE la fonte (URL) alla fine del riassunto
+7. ATTENZIONE: Devi scrivere ESATTAMENTE "Perché ti può interessare:" - NON usare "Perché conta:", "Why it matters:", o altre varianti
+8. La frase "Perché ti può interessare:" è OBBLIGATORIA e deve essere scritta ESATTAMENTE così
 
 ARTICOLO DA RIASSUMERE:
 {content}
@@ -68,7 +89,7 @@ ARTICOLO DA RIASSUMERE:
 URL ARTICOLO:
 {url}
 
-RIASSUNTO:"""
+Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può interessare:" nella riga finale:"""
 
     def summarize(self, item: FeedItem) -> Summary:
         """Generate summary for a feed item using Bedrock with fallback."""
@@ -118,7 +139,7 @@ RIASSUNTO:"""
             )
 
     def bedrock_summarize(self, content: str, url: str) -> str | None:
-        """Generate summary using Amazon Nova Micro via inference profile."""
+        """Generate summary using Amazon Bedrock (supports Nova Micro and Llama models)."""
         if not self.bedrock_client:
             self.logger.warning("Bedrock client not available")
             return None
@@ -133,17 +154,27 @@ RIASSUNTO:"""
                 content_length=len(content),
             )
 
-            # Prepare request for Amazon Nova Micro
-            request_body = {
-                "messages": [{"role": "user", "content": [{"text": prompt}]}],
-                "inferenceConfig": {
-                    "max_new_tokens": self.config.max_tokens,
-                    "temperature": 0.3
+            # Detect model type and prepare appropriate request
+            if "llama" in self.config.model_id.lower():
+                # Llama 3.2 format
+                request_body = {
+                    "prompt": prompt,
+                    "max_gen_len": self.config.max_tokens,
+                    "temperature": 0.3,
+                    "top_p": 0.9
                 }
-            }
+            else:
+                # Amazon Nova Micro format (default)
+                request_body = {
+                    "messages": [{"role": "user", "content": [{"text": prompt}]}],
+                    "inferenceConfig": {
+                        "max_new_tokens": self.config.max_tokens,
+                        "temperature": 0.3
+                    }
+                }
 
             response = self.bedrock_client.invoke_model(
-                modelId=self.config.model_id,  # This is the inference profile ID
+                modelId=self.config.model_id,
                 body=json.dumps(request_body),
                 contentType="application/json",
                 accept="application/json",
@@ -151,23 +182,32 @@ RIASSUNTO:"""
 
             response_body = json.loads(response["body"].read())
             
-            # Nova returns output in this format
-            if "output" in response_body and "message" in response_body["output"]:
-                message = response_body["output"]["message"]
-                if "content" in message and len(message["content"]) > 0:
-                    summary_text = message["content"][0].get("text", "")
-                    
-                    if summary_text:
+            # Parse response based on model type
+            summary_text = None
+            
+            if "llama" in self.config.model_id.lower():
+                # Llama response format
+                if "generation" in response_body:
+                    summary_text = response_body["generation"]
+                    self.logger.info(
+                        "Successfully generated summary using Bedrock Llama",
+                        response_length=len(summary_text),
+                    )
+            else:
+                # Nova response format
+                if "output" in response_body and "message" in response_body["output"]:
+                    message = response_body["output"]["message"]
+                    if "content" in message and len(message["content"]) > 0:
+                        summary_text = message["content"][0].get("text", "")
                         self.logger.info(
                             "Successfully generated summary using Bedrock Nova",
                             response_length=len(summary_text),
                         )
-                        return summary_text.strip()
-                    else:
-                        self.logger.warning("Empty content in Nova response")
-                        return None
+            
+            if summary_text and summary_text.strip():
+                return summary_text.strip()
             else:
-                self.logger.warning("Unexpected Nova response format")
+                self.logger.warning(f"Empty or invalid response from model {self.config.model_id}")
                 return None
 
         except ClientError as e:
@@ -178,7 +218,7 @@ RIASSUNTO:"""
                 )
             elif error_code == "ValidationException":
                 self.logger.warning(
-                    f"Validation error with Nova: {e} - falling back to extractive summarization"
+                    f"Validation error with {self.config.model_id}: {e} - falling back to extractive summarization"
                 )
             else:
                 self.logger.error(f"Bedrock client error: {e}", error_code=error_code)
