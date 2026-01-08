@@ -2,6 +2,7 @@
 
 # Another RSS Telegram Bot - Deployment Script
 # Deployment automation with CodePipeline and S3 source
+# Supports dual model selection: Nova Micro (cost-optimized) or Llama 3.2 3B (quality-optimized)
 
 set -e  # Exit on any error
 
@@ -63,7 +64,7 @@ OPTIONS:
     -t, --telegram-token TOKEN      Telegram bot token (required for initial deploy)
     -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
     -f, --feeds-file FILE           Path to feeds.json file (optional, uses default if not provided)
-    -m, --bedrock-model MODEL_ID    Bedrock model ID (optional, default: amazon.nova-micro-v1:0)
+    -m, --model MODEL               AI model selection: nova-micro (default) or llama-3b
     --bucket BUCKET_NAME            S3 bucket for artifacts (optional, auto-generated if not provided)
     --cleanup                       Delete all AWS resources created by this bot
     --update-code                   Update only the source code (trigger pipeline)
@@ -78,22 +79,31 @@ PREREQUISITES:
     - zip command available
 
 EXAMPLES:
-    # Initial deployment (creates pipeline with default feeds and Nova Micro model)
+    # Initial deployment with default Nova Micro model (cost-optimized)
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890"
     
-    # Initial deployment with Llama 3.2 3B model
+    # Initial deployment with Llama 3.2 3B model (quality-optimized)
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
-       --bedrock-model "us.meta.llama3-2-3b-instruct-v1:0"
+       --model llama-3b
     
-    # Initial deployment with custom feeds file
+    # Initial deployment with custom feeds file and Nova Micro
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
-       --feeds-file /path/to/my-feeds.json
+       --feeds-file /path/to/my-feeds.json --model nova-micro
     
     # Update code only (triggers pipeline)
     $0 --update-code
     
     # Cleanup all resources
     $0 --cleanup --region "eu-west-1"
+
+MODEL SELECTION:
+    nova-micro    Amazon Nova Micro v1:0 (default)
+                  - Cost-optimized, fast inference
+                  - Best for high-volume RSS processing
+    
+    llama-3b      Meta Llama 3.2 3B Instruct
+                  - Quality-optimized, better summaries
+                  - Best for detailed content analysis
 
 FEEDS FILE FORMAT:
     The feeds.json file should have this structure:
@@ -525,7 +535,7 @@ deploy_pipeline_stack() {
     local telegram_token="$4"
     local chat_id="$5"
     local bucket_name="$6"
-    local bedrock_model="$7"
+    local model_selection="$7"
     
     print_header "Deploying Pipeline Stack"
     
@@ -535,22 +545,17 @@ deploy_pipeline_stack() {
         print_status "  BotName: $bot_name"
         print_status "  TelegramChatId: $chat_id"
         print_status "  ArtifactBucketName: $bucket_name"
-        print_status "  BedrockModelId: $bedrock_model"
+        print_status "  BedrockModelSelection: $model_selection"
         return 0
     fi
     
     print_status "Deploying stack: $stack_name"
     print_status "Template: $TEMPLATE_FILE"
     print_status "Region: $region"
-    print_status "Bedrock Model: $bedrock_model"
+    print_status "Model Selection: $model_selection"
     
     # Build parameter overrides
-    local params="BotName=$bot_name TelegramBotToken=$telegram_token TelegramChatId=$chat_id ArtifactBucketName=$bucket_name"
-    
-    # Add BedrockModelId if provided
-    if [[ -n "$bedrock_model" ]]; then
-        params="$params BedrockModelId=$bedrock_model"
-    fi
+    local params="BotName=$bot_name TelegramBotToken=$telegram_token TelegramChatId=$chat_id ArtifactBucketName=$bucket_name BedrockModelSelection=$model_selection"
     
     aws cloudformation deploy \
         --template-file "$TEMPLATE_FILE" \
@@ -636,7 +641,7 @@ main() {
     local chat_id=""
     local feeds_file="$DEFAULT_FEEDS_FILE"
     local bucket_name=""
-    local bedrock_model=""
+    local model_selection="nova-micro"
     local dry_run="false"
     local cleanup_mode="false"
     local update_code_only="false"
@@ -669,8 +674,14 @@ main() {
                 feeds_file="$2"
                 shift 2
                 ;;
-            -m|--bedrock-model)
-                bedrock_model="$2"
+            -m|--model)
+                model_selection="$2"
+                # Validate model selection
+                if [[ "$model_selection" != "nova-micro" && "$model_selection" != "llama-3b" ]]; then
+                    print_error "Invalid model selection: $model_selection"
+                    print_error "Valid options are: nova-micro, llama-3b"
+                    exit 1
+                fi
                 shift 2
                 ;;
             --bucket)
@@ -780,11 +791,7 @@ main() {
     echo "Chat ID: $chat_id"
     echo "Feeds File: $feeds_file"
     echo "S3 Bucket: $bucket_name"
-    if [[ -n "$bedrock_model" ]]; then
-        echo "Bedrock Model: $bedrock_model"
-    else
-        echo "Bedrock Model: amazon.nova-micro-v1:0 (default)"
-    fi
+    echo "Model Selection: $model_selection"
     echo "Dry Run: $dry_run"
     
     if [[ "$dry_run" == "false" && "$skip_confirmation" == "false" ]]; then
@@ -800,7 +807,7 @@ main() {
     create_s3_bucket "$bucket_name" "$region"
     
     # Deploy stack (creates IAM roles)
-    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name" "$bedrock_model"
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name" "$model_selection"
     
     # Apply bucket policy now that IAM roles exist
     apply_bucket_policy "$bucket_name" "$bot_name"

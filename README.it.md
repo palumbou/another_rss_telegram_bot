@@ -22,19 +22,23 @@ Questo progetto è un **esperimento con Kiro AI** per esplorare lo sviluppo assi
 
 ### Modelli AI
 
-Il bot supporta diversi modelli Amazon Bedrock per generare riassunti in italiano:
+Il bot supporta due modelli Amazon Bedrock per generare riassunti in italiano. Puoi scegliere quale modello utilizzare al momento del deployment:
 
 **Default: Amazon Nova Micro** (`amazon.nova-micro-v1:0`)
 - Economico per riassunti ad alto volume
 - Tempi di risposta rapidi (< 1 secondo per riassunto)
 - Buona qualità nelle traduzioni italiane
 - Disponibile tramite profilo di inferenza cross-region
+- Deploy con: `./scripts/deploy.sh -m nova-micro`
 
 **Alternativa: Llama 3.2 3B Instruct** (`us.meta.llama3-2-3b-instruct-v1:0`)
 - Eccellente per riassunti e traduzioni
 - Migliore nel seguire le istruzioni
 - Qualità italiana superiore
 - Costo leggermente più alto ma risultati migliori
+- Deploy con: `./scripts/deploy.sh -m llama-3b`
+
+Per un confronto dettagliato dei modelli, opzioni di configurazione e come scegliere il modello giusto per il tuo caso d'uso, vedi la [Guida Modelli AI](docs/MODELS.it.md).
 
 ### Esempio di Output
 
@@ -132,10 +136,16 @@ Vedi [FEEDS.IT.md](FEEDS.it.md) per istruzioni dettagliate ed esempi.
 ### Deployment
 
 ```bash
-# Deployment iniziale con feed predefiniti
+# Deployment iniziale con modello predefinito (Nova Micro)
 ./scripts/deploy.sh \
   --telegram-token "TUO_BOT_TOKEN" \
   --chat-id "TUO_CHAT_ID"
+
+# Deploy con Llama 3.2 3B per qualità superiore
+./scripts/deploy.sh \
+  --telegram-token "TUO_BOT_TOKEN" \
+  --chat-id "TUO_CHAT_ID" \
+  --model llama-3b
 
 # Oppure con file feeds personalizzato
 ./scripts/deploy.sh \
@@ -150,62 +160,17 @@ Vedi [FEEDS.IT.md](FEEDS.it.md) per istruzioni dettagliate ed esempi.
   --yes
 ```
 
-Per istruzioni complete di deployment, vedi [docs/INFRASTRUCTURE.it.md](docs/INFRASTRUCTURE.it.md).
+**Selezione Modello:**
+- Ometti `--model` o usa `--model nova-micro` per deployment economico (default)
+- Usa `--model llama-3b` per riassunti in italiano di qualità superiore
 
-## Personalizzazione
-
-### Cambiare il Modello AI
-
-Il bot supporta Amazon Nova Micro e Llama 3.2 3B nativamente. Per cambiare modello:
-
-**Opzione 1: Durante il Deployment**
-```bash
-./scripts/deploy.sh \
-  --telegram-token "TUO_BOT_TOKEN" \
-  --chat-id "TUO_CHAT_ID" \
-  --bedrock-model "us.meta.llama3-2-3b-instruct-v1:0"
-```
-
-**Opzione 2: Aggiorna Deployment Esistente**
-```bash
-aws lambda update-function-configuration \
-  --function-name another-rss-telegram-bot-processor \
-  --environment Variables={BEDROCK_MODEL_ID=us.meta.llama3-2-3b-instruct-v1:0} \
-  --region eu-west-1
-```
-
-**Opzione 3: Modifica Template Infrastruttura**
-
-Modifica `infrastructure/template.yaml`:
-```yaml
-Parameters:
-  BedrockModelId:
-    Type: String
-    Default: 'us.meta.llama3-2-3b-instruct-v1:0'  # Cambia qui
-```
-
-Poi rideploya:
-```bash
-./scripts/deploy.sh --update-code --region eu-west-1
-```
-
-**Test Modelli in Locale**
-```bash
-# Test con Nova Micro (default)
-python test_summarizer.py
-
-# Test con Llama 3.2 3B
-python test_summarizer.py us.meta.llama3-2-3b-instruct-v1:0
-```
-
-Per confronto dettagliato dei modelli, configurazione e aggiunta di altri modelli, vedi la [Guida Modelli AI](docs/MODELS.it.md).
+Per istruzioni complete di deployment e confronto dei modelli, vedi [docs/INFRASTRUCTURE.it.md](docs/INFRASTRUCTURE.it.md) e [docs/MODELS.it.md](docs/MODELS.it.md).
 
 ## Documentazione
 
 - [Configurazione Feed RSS](FEEDS.it.md) - Come configurare e personalizzare i feed RSS
 - [Guida Infrastruttura](docs/INFRASTRUCTURE.it.md) - Setup completo dell'infrastruttura
-- [Guida Modelli AI](docs/MODELS.it.md) - Come configurare e cambiare tra modelli AI (Nova, Llama, ecc.)
-- [Guida Test Modelli](docs/TEST-MODELS.it.md) - Come testare i diversi modelli AI
+- [Guida Modelli AI](docs/MODELS.it.md) - Confronto modelli, selezione e configurazione
 - [Processo di Sviluppo Kiro](docs/KIRO-PROMPT.it.md) - Metodologia di sviluppo assistito da AI
 - [Prompts](prompts/README.it.md) - Template dei prompt AI
 - [Script di Deployment](scripts/README.it.md) - Documentazione automazione deployment

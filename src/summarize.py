@@ -234,14 +234,14 @@ Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può intere
         text = re.sub(r"\s+", " ", text).strip()  # Normalize whitespace
 
         if not text:
-            return f"Contenuto non disponibile\n• Articolo vuoto o non leggibile\n• Consultare il link originale\n• Informazioni potrebbero essere disponibili online\nPerché ti può interessare: Il contenuto potrebbe contenere informazioni rilevanti\n\nFonte: {url}"
+            return f"Contenuto non disponibile\n• Articolo vuoto o non leggibile\n• Consultare il link originale\n• Informazioni potrebbero essere disponibili online\nPerché conta: Il contenuto potrebbe contenere informazioni rilevanti\n\nFonte: {url}"
 
         # Split into sentences
         sentences = re.split(r"[.!?]+", text)
         sentences = [s.strip() for s in sentences if len(s.strip()) > 20]
 
         if not sentences:
-            return f"Contenuto breve disponibile\n• Testo troppo breve per il riassunto\n• Consultare l'articolo completo\n• Dettagli nel link originale\nPerché ti può interessare: Informazioni aggiuntive potrebbero essere importanti\n\nFonte: {url}"
+            return f"Contenuto breve disponibile\n• Testo troppo breve per il riassunto\n• Consultare l'articolo completo\n• Dettagli nel link originale\nPerché conta: Informazioni aggiuntive potrebbero essere importanti\n\nFonte: {url}"
 
         # Simple sentence ranking by length and position
         scored_sentences = []
@@ -279,10 +279,11 @@ Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può intere
         why_it_matters = self._generate_why_it_matters(text)
 
         # Format as expected by format_summary
+        # Use "Perché conta:" for fallback (different from Bedrock's "Perché ti può interessare:")
         formatted_text = f"{title}\n"
         for bullet in bullets[:3]:
             formatted_text += f"• {bullet}\n"
-        formatted_text += f"Perché ti può interessare: {why_it_matters}\n\nFonte: {url}"
+        formatted_text += f"Perché conta: {why_it_matters}\n\nFonte: {url}"
 
         return formatted_text
 

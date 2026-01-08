@@ -44,10 +44,13 @@ Parameters:
     ConstraintDescription: 'Must be a valid S3 key'
   
   # Bedrock configuration
-  BedrockModelId:
+  BedrockModelSelection:
     Type: String
-    Default: 'amazon.nova-micro-v1:0'
-    Description: 'Amazon Bedrock model ID for AI summarization'
+    Default: 'nova-micro'
+    AllowedValues:
+      - 'nova-micro'
+      - 'llama-3b'
+    Description: 'AI model for summarization (nova-micro: cost-optimized, llama-3b: quality-optimized)'
   
   # Schedule configuration
   ScheduleExpression:
@@ -86,6 +89,10 @@ Parameters:
     Default: 30
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
     Description: 'CloudWatch Logs retention period in days'
+
+Conditions:
+  UseNovaMicro: !Equals [!Ref BedrockModelSelection, 'nova-micro']
+  UseLlama3B: !Equals [!Ref BedrockModelSelection, 'llama-3b']
 
 Resources:
   # DynamoDB table for deduplication with TTL (Requirements 3.2, 5.5)
@@ -223,7 +230,10 @@ Resources:
           TELEGRAM_SECRET_NAME: !Ref TelegramSecretName
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
           DYNAMODB_TABLE: !Ref DeduplicationTable
-          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_MODEL_ID: !If
+            - UseNovaMicro
+            - 'amazon.nova-micro-v1:0'
+            - 'us.meta.llama3-2-3b-instruct-v1:0'
           CURRENT_AWS_REGION: !Ref AWS::Region
           LOG_LEVEL: INFO
       DeadLetterConfig:

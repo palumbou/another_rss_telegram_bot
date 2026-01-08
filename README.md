@@ -22,19 +22,23 @@ This project is a **Kiro AI experiment** exploring AI-assisted development from 
 
 ### AI Models
 
-The bot supports multiple Amazon Bedrock models for generating Italian summaries:
+The bot supports two Amazon Bedrock models for generating Italian summaries. You can choose which model to use at deployment time:
 
 **Default: Amazon Nova Micro** (`amazon.nova-micro-v1:0`)
 - Cost-effective for high-volume summarization
 - Fast response times (< 1 second per summary)
 - Good quality Italian translations
 - Available via cross-region inference profile
+- Deploy with: `./scripts/deploy.sh -m nova-micro`
 
 **Alternative: Llama 3.2 3B Instruct** (`us.meta.llama3-2-3b-instruct-v1:0`)
 - Excellent for summaries and translations
 - Better instruction following
 - Superior Italian quality
 - Slightly higher cost but better results
+- Deploy with: `./scripts/deploy.sh -m llama-3b`
+
+For detailed model comparison, configuration options, and choosing the right model for your use case, see the [AI Models Guide](docs/MODELS.md).
 
 ### Example Output
 
@@ -132,10 +136,16 @@ See [FEEDS.md](FEEDS.md) for detailed instructions and examples.
 ### Deployment
 
 ```bash
-# Initial deployment with default feeds
+# Initial deployment with default model (Nova Micro)
 ./scripts/deploy.sh \
   --telegram-token "YOUR_BOT_TOKEN" \
   --chat-id "YOUR_CHAT_ID"
+
+# Deploy with Llama 3.2 3B for better quality
+./scripts/deploy.sh \
+  --telegram-token "YOUR_BOT_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --model llama-3b
 
 # Or with custom feeds file
 ./scripts/deploy.sh \
@@ -150,62 +160,17 @@ See [FEEDS.md](FEEDS.md) for detailed instructions and examples.
   --yes
 ```
 
-For complete deployment instructions, see [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md).
+**Model Selection:**
+- Omit `--model` or use `--model nova-micro` for cost-effective deployment (default)
+- Use `--model llama-3b` for higher quality Italian summaries
 
-## Customization
-
-### Changing the AI Model
-
-The bot supports Amazon Nova Micro and Llama 3.2 3B out of the box. To switch models:
-
-**Option 1: During Deployment**
-```bash
-./scripts/deploy.sh \
-  --telegram-token "YOUR_BOT_TOKEN" \
-  --chat-id "YOUR_CHAT_ID" \
-  --bedrock-model "us.meta.llama3-2-3b-instruct-v1:0"
-```
-
-**Option 2: Update Existing Deployment**
-```bash
-aws lambda update-function-configuration \
-  --function-name another-rss-telegram-bot-processor \
-  --environment Variables={BEDROCK_MODEL_ID=us.meta.llama3-2-3b-instruct-v1:0} \
-  --region eu-west-1
-```
-
-**Option 3: Modify Infrastructure Template**
-
-Edit `infrastructure/template.yaml`:
-```yaml
-Parameters:
-  BedrockModelId:
-    Type: String
-    Default: 'us.meta.llama3-2-3b-instruct-v1:0'  # Change here
-```
-
-Then redeploy:
-```bash
-./scripts/deploy.sh --update-code --region eu-west-1
-```
-
-**Testing Models Locally**
-```bash
-# Test with Nova Micro (default)
-python test_summarizer.py
-
-# Test with Llama 3.2 3B
-python test_summarizer.py us.meta.llama3-2-3b-instruct-v1:0
-```
-
-For detailed model comparison, configuration, and adding other models, see the [AI Models Guide](docs/MODELS.md).
+For complete deployment instructions and model comparison, see [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) and [docs/MODELS.md](docs/MODELS.md).
 
 ## Documentation
 
 - [RSS Feeds Configuration](FEEDS.md) - How to configure and customize RSS feeds
 - [Infrastructure Guide](docs/INFRASTRUCTURE.md) - Complete infrastructure setup
-- [AI Models Guide](docs/MODELS.md) - How to configure and switch between AI models (Nova, Llama, etc.)
-- [Model Testing Guide](docs/TEST-MODELS.md) - How to test different AI models
+- [AI Models Guide](docs/MODELS.md) - Model comparison, selection, and configuration
 - [Kiro Development Process](docs/KIRO-PROMPT.md) - AI-assisted development methodology
 - [Prompts](prompts/README.md) - AI prompt templates
 - [Deployment Scripts](scripts/README.md) - Deployment automation documentation
