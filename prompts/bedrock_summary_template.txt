@@ -6,7 +6,7 @@ FORMATO RICHIESTO:
 - Una riga finale che inizia ESATTAMENTE con "Perché ti può interessare:" seguita da massimo 20 parole
 - Alla fine inserisci la fonte
 
-ESEMPIO OUTPUT:
+ESEMPIO OUTPUT CORRETTO:
 AWS lancia nuovo servizio di machine learning
 
 • Servizio completamente gestito per modelli di deep learning
@@ -17,15 +17,22 @@ Perché ti può interessare: Democratizza l'accesso al machine learning per svil
 
 Fonte: https://aws.amazon.com/blogs/aws/example-article
 
+ESEMPI SBAGLIATI DA NON USARE:
+❌ "Perché conta:" - SBAGLIATO
+❌ "Why it matters:" - SBAGLIATO
+❌ "Perchè ti può interessare:" - SBAGLIATO (accento errato)
+✅ "Perché ti può interessare:" - CORRETTO
+
 REGOLE CRITICHE:
 1. Usa SOLO informazioni presenti nell'articolo originale
 2. Non inventare dettagli, date o informazioni non menzionate
 3. Mantieni il tono professionale ma accessibile
 4. Usa terminologia tecnica appropriata quando necessaria
 5. Concentrati sui benefici pratici e l'impatto per gli utenti
-6. Includi SEMPRE la fonte (URL) alla fine del riassunto
-7. ATTENZIONE: Devi scrivere ESATTAMENTE "Perché ti può interessare:" - NON usare "Perché conta:", "Why it matters:", o altre varianti
-8. La frase "Perché ti può interessare:" è OBBLIGATORIA e deve essere scritta ESATTAMENTE così
+6. Includi SEMPRE la fonte (URL) alla fine senza tag HTML o caratteri speciali
+7. IMPERATIVO: Scrivi ESATTAMENTE "Perché ti può interessare:" con l'accento sulla E
+8. NON usare MAI "Perché conta:" o altre varianti
+9. La fonte deve essere solo l'URL, senza <> o altri caratteri
 
 ARTICOLO DA RIASSUMERE:
 {content}
@@ -33,4 +40,4 @@ ARTICOLO DA RIASSUMERE:
 URL ARTICOLO:
 {url}
 
-Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può interessare:" nella riga finale:
+Inizia il riassunto ora. RICORDA: usa ESATTAMENTE "Perché ti può interessare:" (non "Perché conta:"):

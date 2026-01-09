@@ -63,7 +63,7 @@ FORMATO RICHIESTO:
 - Una riga finale che inizia ESATTAMENTE con "Perché ti può interessare:" seguita da massimo 20 parole
 - Alla fine inserisci la fonte
 
-ESEMPIO OUTPUT:
+ESEMPIO OUTPUT CORRETTO:
 AWS lancia nuovo servizio di machine learning
 
 • Servizio completamente gestito per modelli di deep learning
@@ -74,15 +74,22 @@ Perché ti può interessare: Democratizza l'accesso al machine learning per svil
 
 Fonte: https://aws.amazon.com/blogs/aws/example-article
 
+ESEMPI SBAGLIATI DA NON USARE:
+❌ "Perché conta:" - SBAGLIATO
+❌ "Why it matters:" - SBAGLIATO
+❌ "Perchè ti può interessare:" - SBAGLIATO (accento errato)
+✅ "Perché ti può interessare:" - CORRETTO
+
 REGOLE CRITICHE:
 1. Usa SOLO informazioni presenti nell'articolo originale
 2. Non inventare dettagli, date o informazioni non menzionate
 3. Mantieni il tono professionale ma accessibile
 4. Usa terminologia tecnica appropriata quando necessaria
 5. Concentrati sui benefici pratici e l'impatto per gli utenti
-6. Includi SEMPRE la fonte (URL) alla fine del riassunto
-7. ATTENZIONE: Devi scrivere ESATTAMENTE "Perché ti può interessare:" - NON usare "Perché conta:", "Why it matters:", o altre varianti
-8. La frase "Perché ti può interessare:" è OBBLIGATORIA e deve essere scritta ESATTAMENTE così
+6. Includi SEMPRE la fonte (URL) alla fine senza tag HTML o caratteri speciali
+7. IMPERATIVO: Scrivi ESATTAMENTE "Perché ti può interessare:" con l'accento sulla E
+8. NON usare MAI "Perché conta:" o altre varianti
+9. La fonte deve essere solo l'URL, senza <> o altri caratteri
 
 ARTICOLO DA RIASSUMERE:
 {content}
@@ -90,7 +97,7 @@ ARTICOLO DA RIASSUMERE:
 URL ARTICOLO:
 {url}
 
-Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può interessare:" nella riga finale:"""
+Inizia il riassunto ora. RICORDA: usa ESATTAMENTE "Perché ti può interessare:" (non "Perché conta:"):"""
 
     def summarize(self, item: FeedItem) -> Summary:
         """Generate summary for a feed item using Bedrock with fallback."""
@@ -103,6 +110,14 @@ Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può intere
                 summary_text, tokens, response_time = self.bedrock_summarize(item.content, item.link)
                 
                 if summary_text:
+                    # Post-process: fix "Perché conta:" to "Perché ti può interessare:" if model used wrong phrase
+                    summary_text = re.sub(
+                        r'\bPerché conta:',
+                        'Perché ti può interessare:',
+                        summary_text,
+                        flags=re.IGNORECASE
+                    )
+                    
                     summary = self.format_summary(summary_text)
                     summary.model_used = self.config.model_id
                     summary.tokens_used = tokens
@@ -162,7 +177,7 @@ Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESAT
 """
 
     def bedrock_summarize(self, content: str, url: str) -> tuple[str | None, int | None, int | None]:
-        """Generate summary using Amazon Bedrock (supports Nova Micro and Llama models).
+        """Generate summary using Amazon Bedrock (supports Nova Micro, Llama, and Mistral Large models).
         
         Returns:
             Tuple of (summary_text, tokens_used, response_time_ms) or (None, None, None) if failed
@@ -178,6 +193,8 @@ Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESAT
         if "llama" in self.config.model_id.lower():
             prompt = self._format_llama_prompt(prompt)
             self.logger.info(f"Using Llama model: {self.config.model_id}")
+        elif "mistral" in self.config.model_id.lower():
+            self.logger.info(f"Using Mistral model: {self.config.model_id}")
         else:
             self.logger.info(f"Using Nova model: {self.config.model_id}")
 
@@ -188,11 +205,68 @@ Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESAT
                 content_length=len(content),
             )
 
-            # Detect model type and prepare appropriate request format
-            # Llama 3.2 3B: uses legacy format (prompt/max_gen_len) with chat template
-            # Nova Micro/Mistral Large: uses Invoke API (messages/inferenceConfig with maxTokens)
-            if "llama" in self.config.model_id.lower():
-                # Llama 3.2 3B: legacy prompt format with chat template tags
+            # Track response time
+            start_time = time.time()
+            
+            # Detect model type and use appropriate API
+            # Llama 3.2 3B: uses legacy Invoke API with prompt/max_gen_len
+            # Amazon Nova: uses Invoke API with messages/inferenceConfig
+            # Mistral Large: uses Converse API
+            
+            if "mistral" in self.config.model_id.lower():
+                # Mistral Large: Converse API
+                self.logger.info("Using Converse API for Mistral Large")
+                response = self.bedrock_client.converse(
+                    modelId=self.config.model_id,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [{"text": prompt}]
+                        }
+                    ],
+                    inferenceConfig={
+                        "maxTokens": self.config.max_tokens,
+                        "temperature": 0.3
+                    }
+                )
+                
+                response_time_ms = int((time.time() - start_time) * 1000)
+                
+                # Parse Converse API response
+                summary_text = None
+                tokens_used = None
+                
+                if "output" in response and "message" in response["output"]:
+                    message = response["output"]["message"]
+                    if "content" in message and len(message["content"]) > 0:
+                        summary_text = message["content"][0].get("text", "")
+                        
+                        # Extract token usage
+                        if "usage" in response:
+                            usage = response["usage"]
+                            input_tokens = usage.get("inputTokens", 0)
+                            output_tokens = usage.get("outputTokens", 0)
+                            tokens_used = input_tokens + output_tokens
+                        
+                        self.logger.info(
+                            "Successfully generated summary using Bedrock Mistral",
+                            response_length=len(summary_text),
+                            tokens=tokens_used,
+                            response_time_ms=response_time_ms,
+                        )
+                    else:
+                        self.logger.error(f"Converse response missing content. Message structure: {message.keys()}")
+                else:
+                    self.logger.error(f"Converse response missing output/message. Available: {list(response.keys())}")
+                
+                if summary_text and summary_text.strip():
+                    return summary_text.strip(), tokens_used, response_time_ms
+                else:
+                    self.logger.warning(f"Empty or invalid response from Mistral - using fallback")
+                    return None, None, None
+                    
+            elif "llama" in self.config.model_id.lower():
+                # Llama 3.2 3B: legacy Invoke API format
                 self.logger.info("Using Llama legacy format (prompt/max_gen_len)")
                 request_body = {
                     "prompt": prompt,
@@ -200,40 +274,21 @@ Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESAT
                     "temperature": 0.3,
                     "top_p": 0.9
                 }
-            else:
-                # Amazon Nova / Mistral Large: Invoke API format
-                self.logger.info("Using Invoke API format (messages/inferenceConfig)")
-                request_body = {
-                    "messages": [{"role": "user", "content": [{"text": prompt}]}],
-                    "inferenceConfig": {
-                        "maxTokens": self.config.max_tokens,
-                        "temperature": 0.3
-                    }
-                }
-
-            # Track response time
-            start_time = time.time()
-            
-            response = self.bedrock_client.invoke_model(
-                modelId=self.config.model_id,
-                body=json.dumps(request_body),
-                contentType="application/json",
-                accept="application/json",
-            )
-            
-            response_time_ms = int((time.time() - start_time) * 1000)
-
-            response_body = json.loads(response["body"].read())
-            self.logger.info(f"Bedrock response received, keys: {list(response_body.keys())}")
-            
-            # Parse response based on model type
-            # Llama 3.2 3B: legacy response format (generation field)
-            # Nova / Mistral Large: Invoke API response (output/message/content)
-            summary_text = None
-            tokens_used = None
-            
-            if "llama" in self.config.model_id.lower():
-                # Llama 3.2 3B: legacy response format
+                
+                response = self.bedrock_client.invoke_model(
+                    modelId=self.config.model_id,
+                    body=json.dumps(request_body),
+                    contentType="application/json",
+                    accept="application/json",
+                )
+                
+                response_time_ms = int((time.time() - start_time) * 1000)
+                response_body = json.loads(response["body"].read())
+                self.logger.info(f"Bedrock response received, keys: {list(response_body.keys())}")
+                
+                summary_text = None
+                tokens_used = None
+                
                 if "generation" in response_body:
                     summary_text = response_body["generation"]
                     tokens_used = response_body.get("generation_token_count") or response_body.get("prompt_token_count")
@@ -245,8 +300,38 @@ Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESAT
                     )
                 else:
                     self.logger.error(f"Llama response missing 'generation' field. Available: {list(response_body.keys())}")
+                
+                if summary_text and summary_text.strip():
+                    return summary_text.strip(), tokens_used, response_time_ms
+                else:
+                    self.logger.warning(f"Empty or invalid response from Llama - using fallback")
+                    return None, None, None
+                    
             else:
-                # Amazon Nova / Mistral Large: Invoke API response format
+                # Amazon Nova: Invoke API format with messages/inferenceConfig
+                self.logger.info("Using Invoke API format (messages/inferenceConfig)")
+                request_body = {
+                    "messages": [{"role": "user", "content": [{"text": prompt}]}],
+                    "inferenceConfig": {
+                        "maxTokens": self.config.max_tokens,
+                        "temperature": 0.3
+                    }
+                }
+                
+                response = self.bedrock_client.invoke_model(
+                    modelId=self.config.model_id,
+                    body=json.dumps(request_body),
+                    contentType="application/json",
+                    accept="application/json",
+                )
+                
+                response_time_ms = int((time.time() - start_time) * 1000)
+                response_body = json.loads(response["body"].read())
+                self.logger.info(f"Bedrock response received, keys: {list(response_body.keys())}")
+                
+                summary_text = None
+                tokens_used = None
+                
                 if "output" in response_body and "message" in response_body["output"]:
                     message = response_body["output"]["message"]
                     if "content" in message and len(message["content"]) > 0:
@@ -257,9 +342,8 @@ Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESAT
                             input_tokens = usage.get("inputTokens", 0)
                             output_tokens = usage.get("outputTokens", 0)
                             tokens_used = input_tokens + output_tokens
-                        model_name = "Mistral" if "mistral" in self.config.model_id.lower() else "Nova"
                         self.logger.info(
-                            f"Successfully generated summary using Bedrock {model_name}",
+                            "Successfully generated summary using Bedrock Nova",
                             response_length=len(summary_text),
                             tokens=tokens_used,
                             response_time_ms=response_time_ms,
@@ -268,12 +352,12 @@ Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESAT
                         self.logger.error(f"Response missing content. Message structure: {message.keys()}")
                 else:
                     self.logger.error(f"Response missing output/message. Available: {list(response_body.keys())}")
-            
-            if summary_text and summary_text.strip():
-                return summary_text.strip(), tokens_used, response_time_ms
-            else:
-                self.logger.warning(f"Empty or invalid response from model {self.config.model_id} - using fallback")
-                return None, None, None
+                
+                if summary_text and summary_text.strip():
+                    return summary_text.strip(), tokens_used, response_time_ms
+                else:
+                    self.logger.warning(f"Empty or invalid response from Nova - using fallback")
+                    return None, None, None
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
@@ -421,6 +505,8 @@ Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESAT
                     line,
                     flags=re.IGNORECASE,
                 )
+                # Remove < and > characters that some models add
+                source = source.strip().strip('<>').strip()
 
         # Ensure we have exactly 3 bullets
         if len(bullets) < 3:
