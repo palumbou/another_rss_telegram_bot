@@ -182,6 +182,7 @@ Mappings:
 Conditions:
   UseNovaMicro: !Equals [!Ref BedrockModelSelection, 'nova-micro']
   UseLlama3B: !Equals [!Ref BedrockModelSelection, 'llama-3b']
+  UseMistralLarge: !Equals [!Ref BedrockModelSelection, 'mistral-large']
 
 Resources:
   # ============================================================================
@@ -342,8 +343,11 @@ Resources:
           DYNAMODB_TABLE: !Ref DeduplicationTable
           BEDROCK_MODEL_ID: !If
             - UseNovaMicro
-            - 'amazon.nova-micro-v1:0'
-            - !FindInMap [BedrockInferenceProfiles, !Ref 'AWS::Region', LlamaProfile]
+            - !FindInMap [BedrockInferenceProfiles, !Ref 'AWS::Region', NovaProfile]
+            - !If
+              - UseMistralLarge
+              - !FindInMap [BedrockInferenceProfiles, !Ref 'AWS::Region', MistralModel]
+              - !FindInMap [BedrockInferenceProfiles, !Ref 'AWS::Region', LlamaProfile]
           CURRENT_AWS_REGION: !Ref AWS::Region
           LOG_LEVEL: INFO
       DeadLetterConfig:
