@@ -51,8 +51,9 @@ Parameters:
     Default: 'nova-micro'
     AllowedValues:
       - 'nova-micro'
+      - 'mistral-large'
       - 'llama-3b'
-    Description: 'AI model for summarization (nova-micro: cost-optimized, llama-3b: quality-optimized)'
+    Description: 'AI model for summarization (nova-micro: cost-optimized, mistral-large: best multilingual, llama-3b: quality-optimized)'
   
   # Infrastructure configuration
   DynamoDBTTLDays:
@@ -67,6 +68,116 @@ Parameters:
     Default: 30
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
     Description: 'CloudWatch Logs retention period in days'
+
+Mappings:
+  # Regional inference profiles for both Nova Micro and Llama 3.2 3B
+  # AWS Bedrock uses region-specific inference profiles for cross-region routing
+  BedrockInferenceProfiles:
+    # US Regions
+    us-east-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    us-east-2:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    us-west-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    us-west-2:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    # EU Regions
+    eu-central-1:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    eu-west-1:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    eu-west-2:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    eu-west-3:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    eu-north-1:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    eu-south-1:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    eu-south-2:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    eu-central-2:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    # APAC Regions - use US profile as fallback (no dedicated APAC profile)
+    ap-northeast-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-northeast-2:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-northeast-3:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-south-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-south-2:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-southeast-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-southeast-2:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-southeast-3:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-southeast-4:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-southeast-5:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-southeast-7:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ap-east-2:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    # Canada Regions
+    ca-central-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    ca-west-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    # South America
+    sa-east-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    # Middle East
+    me-central-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    me-south-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
+    # Israel
+    il-central-1:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    # Africa
+    af-south-1:
+      NovaProfile: 'eu.amazon.nova-micro-v1:0'
+      LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
+    # Mexico
+    mx-central-1:
+      NovaProfile: 'us.amazon.nova-micro-v1:0'
+      LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
 
 Conditions:
   UseNovaMicro: !Equals [!Ref BedrockModelSelection, 'nova-micro']
@@ -179,7 +290,7 @@ Resources:
                   - bedrock:InvokeModel
                 Resource: 
                   - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-micro-v1:0'
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/us.meta.llama3-2-3b-instruct-v1:0'
+                  - !Sub 'arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*'
                   - !Sub 'arn:aws:bedrock:*::foundation-model/*'
         - PolicyName: CloudWatchMetrics
           PolicyDocument:
@@ -232,7 +343,7 @@ Resources:
           BEDROCK_MODEL_ID: !If
             - UseNovaMicro
             - 'amazon.nova-micro-v1:0'
-            - 'us.meta.llama3-2-3b-instruct-v1:0'
+            - !FindInMap [BedrockInferenceProfiles, !Ref 'AWS::Region', LlamaProfile]
           CURRENT_AWS_REGION: !Ref AWS::Region
           LOG_LEVEL: INFO
       DeadLetterConfig:

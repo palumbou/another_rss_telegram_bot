@@ -96,6 +96,51 @@ class TelegramPublisher:
             source_name = self._extract_source_name(source_url)
             if source_name:
                 message += f"\n📰 <i>Fonte: {source_name}</i>"
+        
+        # Add model metadata if available
+        if summary.model_used:
+            message += f"\n\n<code>━━━━━━━━━━━━━━━━━━━━</code>"
+            
+            # Format model name
+            model_display = summary.model_used
+            if "amazon.nova" in model_display.lower():
+                if "nova-2-pro" in model_display.lower():
+                    model_display = "Amazon Nova 2 Pro"
+                elif "nova-2-lite" in model_display.lower():
+                    model_display = "Amazon Nova 2 Lite"
+                elif "nova-2-sonic" in model_display.lower():
+                    model_display = "Amazon Nova 2 Sonic"
+                else:
+                    model_display = "Amazon Nova Micro"
+            elif "mistral" in model_display.lower():
+                if "large-3" in model_display.lower():
+                    model_display = "Mistral Large 3 (675B MoE)"
+                elif "large-2402" in model_display.lower():
+                    model_display = "Mistral Large (24.02)"
+                elif "large-2407" in model_display.lower():
+                    model_display = "Mistral Large (24.07)"
+                else:
+                    model_display = "Mistral Large"
+            elif "llama" in model_display.lower():
+                model_display = "Llama 3.2 3B"
+            elif model_display == "fallback":
+                model_display = "Extractive (Fallback)"
+            elif model_display == "error":
+                model_display = "Error (Emergency Fallback)"
+            
+            message += f"\n🤖 <i>Modello: {model_display}</i>"
+            
+            # Add tokens if available
+            if summary.tokens_used is not None:
+                message += f"\n🔢 <i>Token: {summary.tokens_used}</i>"
+            
+            # Add response time if available
+            if summary.response_time_ms is not None:
+                if summary.response_time_ms < 1000:
+                    time_display = f"{summary.response_time_ms}ms"
+                else:
+                    time_display = f"{summary.response_time_ms / 1000:.2f}s"
+                message += f"\n⚡ <i>Tempo: {time_display}</i>"
 
         return message
 

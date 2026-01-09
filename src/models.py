@@ -23,3 +23,6 @@ class Summary:
     title: str
     bullets: list[str]  # Max 3 elementi, 15 parole ciascuno
     why_it_matters: str  # Max 20 parole
+    model_used: str | None = None  # Model ID used for generation
+    tokens_used: int | None = None  # Number of tokens used
+    response_time_ms: int | None = None  # Response time in milliseconds

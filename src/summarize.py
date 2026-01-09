@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 from pathlib import Path
 
 import boto3
@@ -99,14 +100,20 @@ Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può intere
             # Try Bedrock first
             if self.bedrock_client:
                 self.logger.info("Attempting Bedrock summarization", item_title=item.title)
-                summary_text = self.bedrock_summarize(item.content, item.link)
+                summary_text, tokens, response_time = self.bedrock_summarize(item.content, item.link)
                 
                 if summary_text:
                     summary = self.format_summary(summary_text)
+                    summary.model_used = self.config.model_id
+                    summary.tokens_used = tokens
+                    summary.response_time_ms = response_time
                     self.logger.info(
                         "Successfully generated Bedrock summary",
                         item_title=item.title,
                         summary_method="bedrock",
+                        model=self.config.model_id,
+                        tokens=tokens,
+                        response_time_ms=response_time,
                     )
                     return summary
             
@@ -116,6 +123,9 @@ Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può intere
             )
             summary_text = self.fallback_summarize(item.content, item.link)
             summary = self.format_summary(summary_text)
+            summary.model_used = "fallback"
+            summary.tokens_used = None
+            summary.response_time_ms = None
             self.logger.info(
                 "Successfully generated fallback summary",
                 item_title=item.title,
@@ -136,27 +146,54 @@ Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può intere
                     "Errore durante l'elaborazione del testo",
                 ],
                 why_it_matters="Informazioni importanti disponibili nell'articolo completo",
+                model_used="error",
+                tokens_used=None,
+                response_time_ms=None,
             )
 
-    def bedrock_summarize(self, content: str, url: str) -> str | None:
-        """Generate summary using Amazon Bedrock (supports Nova Micro and Llama models)."""
+    def _format_llama_prompt(self, prompt: str) -> str:
+        """Format prompt with Llama 3 chat template tags."""
+        return f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+Sei un assistente che crea riassunti di articoli tecnici in italiano. Segui ESATTAMENTE il formato richiesto.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
+
+    def bedrock_summarize(self, content: str, url: str) -> tuple[str | None, int | None, int | None]:
+        """Generate summary using Amazon Bedrock (supports Nova Micro and Llama models).
+        
+        Returns:
+            Tuple of (summary_text, tokens_used, response_time_ms) or (None, None, None) if failed
+        """
         if not self.bedrock_client:
-            self.logger.warning("Bedrock client not available")
-            return None
+            self.logger.warning("Bedrock client not available - using fallback")
+            return None, None, None
 
         # Use template and substitute content and URL
         prompt = self.prompt_template.format(content=content, url=url)
+        
+        # Apply Llama 3 chat template if using Llama model
+        if "llama" in self.config.model_id.lower():
+            prompt = self._format_llama_prompt(prompt)
+            self.logger.info(f"Using Llama model: {self.config.model_id}")
+        else:
+            self.logger.info(f"Using Nova model: {self.config.model_id}")
 
         try:
-            self.logger.debug(
+            self.logger.info(
                 "Calling Bedrock API",
                 model_id=self.config.model_id,
                 content_length=len(content),
             )
 
-            # Detect model type and prepare appropriate request
+            # Detect model type and prepare appropriate request format
+            # Llama 3.2 3B: uses legacy format (prompt/max_gen_len) with chat template
+            # Nova Micro/Mistral Large: uses Invoke API (messages/inferenceConfig with maxTokens)
             if "llama" in self.config.model_id.lower():
-                # Llama 3.2 format
+                # Llama 3.2 3B: legacy prompt format with chat template tags
+                self.logger.info("Using Llama legacy format (prompt/max_gen_len)")
                 request_body = {
                     "prompt": prompt,
                     "max_gen_len": self.config.max_tokens,
@@ -164,68 +201,97 @@ Inizia il riassunto ora, ricordando di usare ESATTAMENTE "Perché ti può intere
                     "top_p": 0.9
                 }
             else:
-                # Amazon Nova Micro format (default)
+                # Amazon Nova / Mistral Large: Invoke API format
+                self.logger.info("Using Invoke API format (messages/inferenceConfig)")
                 request_body = {
                     "messages": [{"role": "user", "content": [{"text": prompt}]}],
                     "inferenceConfig": {
-                        "max_new_tokens": self.config.max_tokens,
+                        "maxTokens": self.config.max_tokens,
                         "temperature": 0.3
                     }
                 }
 
+            # Track response time
+            start_time = time.time()
+            
             response = self.bedrock_client.invoke_model(
                 modelId=self.config.model_id,
                 body=json.dumps(request_body),
                 contentType="application/json",
                 accept="application/json",
             )
+            
+            response_time_ms = int((time.time() - start_time) * 1000)
 
             response_body = json.loads(response["body"].read())
+            self.logger.info(f"Bedrock response received, keys: {list(response_body.keys())}")
             
             # Parse response based on model type
+            # Llama 3.2 3B: legacy response format (generation field)
+            # Nova / Mistral Large: Invoke API response (output/message/content)
             summary_text = None
+            tokens_used = None
             
             if "llama" in self.config.model_id.lower():
-                # Llama response format
+                # Llama 3.2 3B: legacy response format
                 if "generation" in response_body:
                     summary_text = response_body["generation"]
+                    tokens_used = response_body.get("generation_token_count") or response_body.get("prompt_token_count")
                     self.logger.info(
                         "Successfully generated summary using Bedrock Llama",
                         response_length=len(summary_text),
+                        tokens=tokens_used,
+                        response_time_ms=response_time_ms,
                     )
+                else:
+                    self.logger.error(f"Llama response missing 'generation' field. Available: {list(response_body.keys())}")
             else:
-                # Nova response format
+                # Amazon Nova / Mistral Large: Invoke API response format
                 if "output" in response_body and "message" in response_body["output"]:
                     message = response_body["output"]["message"]
                     if "content" in message and len(message["content"]) > 0:
                         summary_text = message["content"][0].get("text", "")
+                        # Extract token usage from usage field
+                        if "usage" in response_body:
+                            usage = response_body["usage"]
+                            input_tokens = usage.get("inputTokens", 0)
+                            output_tokens = usage.get("outputTokens", 0)
+                            tokens_used = input_tokens + output_tokens
+                        model_name = "Mistral" if "mistral" in self.config.model_id.lower() else "Nova"
                         self.logger.info(
-                            "Successfully generated summary using Bedrock Nova",
+                            f"Successfully generated summary using Bedrock {model_name}",
                             response_length=len(summary_text),
+                            tokens=tokens_used,
+                            response_time_ms=response_time_ms,
                         )
+                    else:
+                        self.logger.error(f"Response missing content. Message structure: {message.keys()}")
+                else:
+                    self.logger.error(f"Response missing output/message. Available: {list(response_body.keys())}")
             
             if summary_text and summary_text.strip():
-                return summary_text.strip()
+                return summary_text.strip(), tokens_used, response_time_ms
             else:
-                self.logger.warning(f"Empty or invalid response from model {self.config.model_id}")
-                return None
+                self.logger.warning(f"Empty or invalid response from model {self.config.model_id} - using fallback")
+                return None, None, None
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
+            error_message = e.response.get("Error", {}).get("Message", "")
             if error_code == "AccessDeniedException":
                 self.logger.warning(
-                    "Access denied to Bedrock - falling back to extractive summarization"
+                    f"Access denied to Bedrock model {self.config.model_id} - check IAM permissions - falling back to extractive summarization"
                 )
             elif error_code == "ValidationException":
                 self.logger.warning(
-                    f"Validation error with {self.config.model_id}: {e} - falling back to extractive summarization"
+                    f"Validation error with {self.config.model_id}: {error_message} - falling back to extractive summarization"
                 )
             else:
-                self.logger.error(f"Bedrock client error: {e}", error_code=error_code)
-            return None
+                self.logger.error(f"Bedrock client error: {error_code} - {error_message}", error_code=error_code)
+            return None, None, None
         except Exception as e:
             self.logger.error(f"Unexpected error calling Bedrock: {e}", error=str(e))
-            return None
+            return None, None, None
 
     def fallback_summarize(self, content: str, url: str) -> str:
         """Generate extractive summary without external dependencies."""

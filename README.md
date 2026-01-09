@@ -22,7 +22,7 @@ This project is a **Kiro AI experiment** exploring AI-assisted development from 
 
 ### AI Models
 
-The bot supports two Amazon Bedrock models for generating Italian summaries. You can choose which model to use at deployment time:
+The bot supports three Amazon Bedrock models for generating Italian summaries. You can choose which model to use at deployment time:
 
 **Default: Amazon Nova Micro** (`amazon.nova-micro-v1:0`)
 - Cost-effective for high-volume summarization
@@ -30,6 +30,14 @@ The bot supports two Amazon Bedrock models for generating Italian summaries. You
 - Good quality Italian translations
 - Available via cross-region inference profile
 - Deploy with: `./scripts/deploy.sh -m nova-micro`
+
+**Premium: Mistral Large** (intelligent regional selection)
+- Excellent multilingual translation (EN→IT, FR, ES, DE)
+- Superior reasoning and context understanding
+- Uses Mistral Large 3 (675B MoE) in 6 regions, Large 24.02 in others
+- Best for quality-focused deployments
+- Cost: ~$0.78/month for 150 articles
+- Deploy with: `./scripts/deploy.sh -m mistral-large`
 
 **Alternative: Llama 3.2 3B Instruct** (`us.meta.llama3-2-3b-instruct-v1:0`)
 - Excellent for summaries and translations

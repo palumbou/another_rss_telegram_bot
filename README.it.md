@@ -22,7 +22,7 @@ Questo progetto è un **esperimento con Kiro AI** per esplorare lo sviluppo assi
 
 ### Modelli AI
 
-Il bot supporta due modelli Amazon Bedrock per generare riassunti in italiano. Puoi scegliere quale modello utilizzare al momento del deployment:
+Il bot supporta tre modelli Amazon Bedrock per generare riassunti in italiano. Puoi scegliere quale modello utilizzare al momento del deployment:
 
 **Default: Amazon Nova Micro** (`amazon.nova-micro-v1:0`)
 - Economico per riassunti ad alto volume
@@ -30,6 +30,14 @@ Il bot supporta due modelli Amazon Bedrock per generare riassunti in italiano. P
 - Buona qualità nelle traduzioni italiane
 - Disponibile tramite profilo di inferenza cross-region
 - Deploy con: `./scripts/deploy.sh -m nova-micro`
+
+**Premium: Mistral Large** (selezione regionale intelligente)
+- Eccellente traduzione multilingua (EN→IT, FR, ES, DE)
+- Reasoning e comprensione del contesto superiori
+- Usa Mistral Large 3 (675B MoE) in 6 regioni, Large 24.02 nelle altre
+- Ideale per deployment focalizzati sulla qualità
+- Costo: ~$0.78/mese per 150 articoli
+- Deploy con: `./scripts/deploy.sh -m mistral-large`
 
 **Alternativa: Llama 3.2 3B Instruct** (`us.meta.llama3-2-3b-instruct-v1:0`)
 - Eccellente per riassunti e traduzioni

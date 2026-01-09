@@ -64,10 +64,11 @@ OPTIONS:
     -t, --telegram-token TOKEN      Telegram bot token (required for initial deploy)
     -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
     -f, --feeds-file FILE           Path to feeds.json file (optional, uses default if not provided)
-    -m, --model MODEL               AI model selection: nova-micro (default) or llama-3b
+    -m, --model MODEL               AI model selection: nova-micro (default), mistral-large, or llama-3b
     --bucket BUCKET_NAME            S3 bucket for artifacts (optional, auto-generated if not provided)
     --cleanup                       Delete all AWS resources created by this bot
     --update-code                   Update only the source code (trigger pipeline)
+    --update-stack                  Update stack parameters (e.g., change model) without redeploying code
     --dry-run                       Show what would be deployed without executing
     -y, --yes                       Skip confirmation prompts
     -h, --help                      Show this help message
@@ -86,6 +87,10 @@ EXAMPLES:
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
        --model llama-3b
     
+    # Initial deployment with Mistral Large (best multilingual translation)
+    $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
+       --model mistral-large
+    
     # Initial deployment with custom feeds file and Nova Micro
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
        --feeds-file /path/to/my-feeds.json --model nova-micro
@@ -93,17 +98,28 @@ EXAMPLES:
     # Update code only (triggers pipeline)
     $0 --update-code
     
+    # Update stack parameters (e.g., switch model from nova-micro to llama-3b)
+    $0 --update-stack --model llama-3b
+    
     # Cleanup all resources
     $0 --cleanup --region "eu-west-1"
 
 MODEL SELECTION:
-    nova-micro    Amazon Nova Micro v1:0 (default)
-                  - Cost-optimized, fast inference
-                  - Best for high-volume RSS processing
+    nova-micro      Amazon Nova Micro v1:0 (default)
+                    - Most cost-effective (~$0.015/month for 150 articles)
+                    - Fast inference
+                    - Best for high-volume RSS processing
     
-    llama-3b      Meta Llama 3.2 3B Instruct
-                  - Quality-optimized, better summaries
-                  - Best for detailed content analysis
+    mistral-large   Mistral Large 2 (24.07)
+                    - Excellent multilingual translation (EN→IT)
+                    - Superior reasoning and context understanding
+                    - Best for complex content and accurate translations
+                    - Cost: ~$0.78/month for 150 articles
+    
+    llama-3b        Meta Llama 3.2 3B Instruct
+                    - Quality-optimized, better summaries
+                    - Good for detailed content analysis
+                    - Cost: ~$0.06/month for 150 articles
 
 FEEDS FILE FORMAT:
     The feeds.json file should have this structure:
@@ -645,6 +661,7 @@ main() {
     local dry_run="false"
     local cleanup_mode="false"
     local update_code_only="false"
+    local update_stack_only="false"
     local skip_confirmation="false"
     
     # Parse command line arguments
@@ -677,9 +694,9 @@ main() {
             -m|--model)
                 model_selection="$2"
                 # Validate model selection
-                if [[ "$model_selection" != "nova-micro" && "$model_selection" != "llama-3b" ]]; then
+                if [[ "$model_selection" != "nova-micro" && "$model_selection" != "mistral-large" && "$model_selection" != "llama-3b" ]]; then
                     print_error "Invalid model selection: $model_selection"
-                    print_error "Valid options are: nova-micro, llama-3b"
+                    print_error "Valid options are: nova-micro, mistral-large, llama-3b"
                     exit 1
                 fi
                 shift 2
@@ -694,6 +711,10 @@ main() {
                 ;;
             --update-code)
                 update_code_only="true"
+                shift
+                ;;
+            --update-stack)
+                update_stack_only="true"
                 shift
                 ;;
             --dry-run)
@@ -767,6 +788,80 @@ main() {
         
         print_success "Code updated! Pipeline will deploy automatically."
         print_status "Monitor pipeline at: https://$region.console.aws.amazon.com/codesuite/codepipeline/pipelines"
+        return 0
+    fi
+    
+    # Handle update stack only mode (update parameters without redeploying code)
+    if [[ "$update_stack_only" == "true" ]]; then
+        print_header "Update Stack Parameters Mode"
+        
+        # Check if stack exists
+        if ! aws cloudformation describe-stacks --stack-name "$stack_name" --region "$region" &>/dev/null; then
+            print_error "Stack '$stack_name' not found in region '$region'"
+            print_error "Run initial deployment first without --update-stack flag."
+            exit 1
+        fi
+        
+        print_status "Updating stack: $stack_name"
+        print_status "Region: $region"
+        
+        if [[ -n "$model_selection" ]]; then
+            print_status "Changing model to: $model_selection"
+        fi
+        
+        if [[ "$dry_run" == "false" && "$skip_confirmation" == "false" ]]; then
+            echo -e "\n${YELLOW}This will update the CloudFormation stack parameters.${NC}"
+            echo -e "${YELLOW}Press Enter to continue or Ctrl+C to cancel...${NC}"
+            read -r
+        fi
+        
+        if [[ "$dry_run" == "true" ]]; then
+            print_status "[DRY RUN] Would update stack parameters"
+            if [[ -n "$model_selection" ]]; then
+                print_status "[DRY RUN] Would set BedrockModelSelection=$model_selection"
+            fi
+            return 0
+        fi
+        
+        # Build parameters array - use previous values for all except what's specified
+        local params="ParameterKey=BotName,UsePreviousValue=true"
+        params="$params ParameterKey=TelegramBotToken,UsePreviousValue=true"
+        params="$params ParameterKey=TelegramChatId,UsePreviousValue=true"
+        params="$params ParameterKey=ArtifactBucketName,UsePreviousValue=true"
+        params="$params ParameterKey=LambdaTimeout,UsePreviousValue=true"
+        params="$params ParameterKey=LambdaMemorySize,UsePreviousValue=true"
+        params="$params ParameterKey=ScheduleExpression,UsePreviousValue=true"
+        params="$params ParameterKey=ScheduleTimezone,UsePreviousValue=true"
+        params="$params ParameterKey=DynamoDBTTLDays,UsePreviousValue=true"
+        params="$params ParameterKey=LogRetentionDays,UsePreviousValue=true"
+        
+        # Override model selection if specified
+        if [[ -n "$model_selection" ]]; then
+            params="$params ParameterKey=BedrockModelSelection,ParameterValue=$model_selection"
+        else
+            params="$params ParameterKey=BedrockModelSelection,UsePreviousValue=true"
+        fi
+        
+        print_status "Updating CloudFormation stack..."
+        aws cloudformation update-stack \
+            --stack-name "$stack_name" \
+            --template-body "file://$TEMPLATE_FILE" \
+            --parameters $params \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region "$region"
+        
+        print_status "Waiting for stack update to complete..."
+        aws cloudformation wait stack-update-complete \
+            --stack-name "$stack_name" \
+            --region "$region"
+        
+        print_success "Stack parameters updated successfully!"
+        print_status "Lambda function will use the new configuration on next execution."
+        
+        if [[ -n "$model_selection" ]]; then
+            print_success "Model changed to: $model_selection"
+        fi
+        
         return 0
     fi
     

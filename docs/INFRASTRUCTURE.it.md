@@ -145,6 +145,26 @@ Una volta configurata la pipeline:
    - CloudFormation aggiorna lo stack
 4. **Verifica**: Controlla log CloudWatch per deployment riuscito
 
+### Deployment Manuale
+
+Per test o aggiornamenti di emergenza:
+
+```bash
+# Build locale
+python3 -m pip install -r requirements.txt -t build/
+cp -r src build/
+cd build && zip -r ../lambda.zip . && cd ..
+
+# Upload su S3
+aws s3 cp lambda.zip s3://{bucket-name}/lambda-packages/
+
+# Aggiorna funzione Lambda
+aws lambda update-function-code \
+  --function-name {bot-name}-processor \
+  --s3-bucket {bucket-name} \
+  --s3-key lambda-packages/lambda.zip
+```
+
 ## Configurazione
 
 ### Variabili Ambiente
@@ -196,6 +216,14 @@ L'applicazione pubblica queste metriche su CloudWatch:
 - `ItemsDeduplicated`
 - `Errors`
 
+### Allarmi
+
+Considera di configurare Allarmi CloudWatch per:
+- Fallimenti esecuzione Lambda
+- Conteggio messaggi DLQ
+- Soglia tasso errori
+- Durata Lambda che si avvicina al timeout
+
 ## Sicurezza
 
 ### Ruoli IAM
@@ -210,6 +238,7 @@ L'applicazione pubblica queste metriche su CloudWatch:
 #### Ruolo Servizio CodeBuild
 - **S3**: GetObject, PutObject su bucket artifact
 - **CloudWatch**: CreateLogGroup, CreateLogStream, PutLogEvents
+- **ECR**: Pull immagini base (se necessario)
 
 #### Ruolo Servizio CodePipeline
 - **S3**: GetObject, PutObject su bucket artifact
@@ -217,22 +246,104 @@ L'applicazione pubblica queste metriche su CloudWatch:
 - **CloudFormation**: CreateStack, UpdateStack, DescribeStacks
 - **IAM**: PassRole per CloudFormation
 
+### Best Practice
+
+1. **Secrets**: Non committare mai token o credenziali
+2. **Least Privilege**: I ruoli IAM hanno i permessi minimi richiesti
+3. **Crittografia**: I bucket S3 usano crittografia server-side
+4. **Logging**: Nessun dato sensibile nei log CloudWatch
+5. **Network**: Lambda esegue in VPC gestito da AWS (nessun VPC custom necessario)
+
 ## Ottimizzazione Costi
 
 ### Costi Mensili Stimati
 
 Per esecuzione giornaliera (30 esecuzioni/mese):
 
-- **Lambda**: ~$0.20
-- **DynamoDB**: ~$0.25
+- **Lambda**: ~$0.20 (128MB, 30s esecuzione media)
+- **DynamoDB**: ~$0.25 (on-demand, traffico basso)
 - **EventBridge**: $0.00 (free tier)
-- **Secrets Manager**: $0.40
-- **CloudWatch**: ~$0.50
-- **CodePipeline**: $1.00
-- **CodeBuild**: ~$0.10
-- **S3**: ~$0.10
+- **Secrets Manager**: $0.40 (1 secret)
+- **CloudWatch**: ~$0.50 (log + metriche)
+- **CodePipeline**: $1.00 (1 pipeline attiva)
+- **CodeBuild**: ~$0.10 (30 build, 1 min ciascuna)
+- **S3**: ~$0.10 (storage artifact)
 
 **Totale**: ~$2.55/mese
+
+### Suggerimenti Riduzione Costi
+
+1. Riduci memoria Lambda se possibile
+2. Regola periodo retention log
+3. Usa policy lifecycle S3 per vecchi artifact
+4. Considera capacità riservata per DynamoDB se il traffico aumenta
+5. Disabilita CodePipeline se sufficienti deployment manuali
+
+## Troubleshooting
+
+### Fallimenti Pipeline
+
+**Source Stage**:
+- Verifica che la connessione GitHub sia attiva
+- Controlla nomi repository e branch
+- Assicurati che il webhook sia configurato
+
+**Build Stage**:
+- Rivedi log CodeBuild in CloudWatch
+- Verifica sintassi `buildspec.yml`
+- Controlla compatibilità dipendenze Python
+
+**Deploy Stage**:
+- Rivedi eventi CloudFormation
+- Controlla permessi IAM
+- Verifica valori parametri
+
+### Fallimenti Esecuzione Lambda
+
+1. **Controlla Log CloudWatch**:
+   ```bash
+   aws logs tail /aws/lambda/{bot-name}-processor --follow
+   ```
+
+2. **Controlla Messaggi DLQ**:
+   ```bash
+   aws sqs receive-message \
+     --queue-url {dlq-url} \
+     --max-number-of-messages 10
+   ```
+
+3. **Test Manuale**:
+   ```bash
+   aws lambda invoke \
+     --function-name {bot-name}-processor \
+     --payload '{}' \
+     response.json
+   ```
+
+### Problemi Comuni
+
+| Problema | Causa | Soluzione |
+|----------|-------|-----------|
+| AccessDenied a Bedrock | Regione non abilitata | Abilita Bedrock nella regione o usa fallback |
+| Timeout API Telegram | Problemi di rete | Controlla logica retry, aumenta timeout |
+| Throttling DynamoDB | Traffico elevato | Passa a capacità provisionata |
+| Timeout Lambda | Feed lenti | Aumenta timeout, ottimizza codice |
+
+## Manutenzione
+
+### Task Regolari
+
+- **Settimanale**: Rivedi log CloudWatch per errori
+- **Mensile**: Controlla DLQ per messaggi falliti
+- **Trimestrale**: Rivedi e aggiorna dipendenze
+- **Annuale**: Ruota token bot Telegram
+
+### Aggiornamenti
+
+1. **Modifiche Codice**: Push su GitHub (deployment automatico)
+2. **Modifiche Infrastruttura**: Aggiorna template CloudFormation
+3. **Modifiche Configurazione**: Aggiorna parametri stack
+4. **Aggiornamenti Dipendenze**: Aggiorna `requirements.txt` e push
 
 ## Pulizia
 
