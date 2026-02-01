@@ -196,7 +196,17 @@ This project was developed using **spec-driven development** with Kiro AI:
 
 ## License
 
-This project is released under the MIT License.
+This project is licensed under the [Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)](LICENSE).
+
+You are free to:
+- Use, copy, and modify this software for non-commercial purposes
+- Share and distribute the software
+
+Under the following terms:
+- Attribution: You must give appropriate credit
+- NonCommercial: You may not use the material for commercial purposes
+
+For commercial use, please contact the author.
 
 ---
 

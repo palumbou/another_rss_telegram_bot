@@ -196,7 +196,17 @@ Questo progetto è stato sviluppato usando lo **spec-driven development** con Ki
 
 ## Licenza
 
-Questo progetto è rilasciato sotto licenza MIT.
+Questo progetto è rilasciato sotto [Licenza Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](LICENSE).
+
+Sei libero di:
+- Usare, copiare e modificare questo software per scopi non commerciali
+- Condividere e distribuire il software
+
+Alle seguenti condizioni:
+- Attribuzione: Devi dare credito appropriato
+- Non Commerciale: Non puoi usare il materiale per scopi commerciali
+
+Per uso commerciale, contatta l'autore.
 
 ---
 
