@@ -75,6 +75,12 @@ Serverless system on AWS with the following components:
 - **CodePipeline**: Automated build and deployment (CI/CD)
 - **S3**: Artifact storage and pipeline automation
 
+### Cost Management
+All AWS resources are tagged with a `CostCenter` tag (set to the bot name) for cost tracking and allocation. This enables:
+- Cost analysis by bot instance
+- Budget alerts per deployment
+- Resource grouping in AWS Cost Explorer
+
 ### Code Components
 - `src/lambda_handler.py`: Main entry point and orchestration
 - `src/rss.py`: RSS feed management with feedparser

@@ -228,6 +228,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Security
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # DynamoDB table for deduplication with TTL
   DeduplicationTable:
@@ -251,6 +253,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Deduplication
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # SQS Dead Letter Queue for error handling
   DeadLetterQueue:
@@ -264,6 +268,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: ErrorHandling
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # CloudWatch Log Group with retention policy
   LambdaLogGroup:
@@ -276,6 +282,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Logging
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # IAM role for Lambda function with minimal privileges
   LambdaExecutionRole:
@@ -344,6 +352,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: IAM
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # Lambda function with inline placeholder code
   ProcessorFunction:
@@ -384,6 +394,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Processor
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # EventBridge Scheduler for daily execution
   SchedulerRole:
@@ -411,6 +423,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Scheduler
+        - Key: CostCenter
+          Value: !Ref BotName
   
   ProcessorSchedule:
     Type: AWS::Scheduler::Schedule
@@ -517,6 +531,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Build
+        - Key: CostCenter
+          Value: !Ref BotName
 
   # CodePipeline
   Pipeline:
@@ -575,6 +591,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Pipeline
+        - Key: CostCenter
+          Value: !Ref BotName
 
   # EventBridge Rule to trigger pipeline on S3 upload
   # Commented out temporarily due to CloudFormation validation issues

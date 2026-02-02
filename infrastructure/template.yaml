@@ -256,6 +256,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Deduplication
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # SQS Dead Letter Queue for error handling (Requirements 3.5, 8.3, 10.1)
   DeadLetterQueue:
@@ -269,6 +271,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: ErrorHandling
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # CloudWatch Log Group with retention policy (Requirements 3.6, 10.5)
   LambdaLogGroup:
@@ -281,6 +285,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Logging
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # IAM role for Lambda function with minimal privileges (Requirements 3.3, 9.3, 9.4, 9.5, 9.6)
   LambdaExecutionRole:
@@ -349,6 +355,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: IAM
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # Lambda function (Requirements 3.3, 3.4)
   ProcessorFunction:
@@ -385,6 +393,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Processor
+        - Key: CostCenter
+          Value: !Ref BotName
   
   # EventBridge Scheduler for daily execution (Requirements 3.4, 8.1)
   SchedulerRole:
@@ -412,6 +422,8 @@ Resources:
           Value: !Ref BotName
         - Key: Component
           Value: Scheduler
+        - Key: CostCenter
+          Value: !Ref BotName
   
   ProcessorSchedule:
     Type: AWS::Scheduler::Schedule
