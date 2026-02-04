@@ -2,7 +2,7 @@
 
 A generic, reusable serverless bot that monitors RSS feeds and sends automatic updates to configured Telegram channels.
 
-> **Available languages**: [English (current)](README.md) | [Italiano](README.IT.md)
+> **Available languages**: [English (current)](README.md) | [Italiano](README.it.md)
 
 ## Overview
 
