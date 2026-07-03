@@ -65,6 +65,7 @@ OPTIONS:
     -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
     -f, --feeds-file FILE           Path to feeds.json file (optional, uses default if not provided)
     -m, --model MODEL               AI model selection: nova-micro (default), mistral-large, or llama-3b
+    -M, --message-mode MODE         Telegram delivery mode: per_item (default) or digest
     --bucket BUCKET_NAME            S3 bucket for artifacts (optional, auto-generated if not provided)
     --cleanup                       Delete all AWS resources created by this bot
     --update-code                   Update only the source code (trigger pipeline)
@@ -120,6 +121,16 @@ MODEL SELECTION:
                     - Quality-optimized, better summaries
                     - Good for detailed content analysis
                     - Cost: ~$0.06/month for 150 articles
+
+MESSAGE MODE:
+    per_item        One Telegram message per news item (default)
+
+    digest          A single combined message with all the day's news
+                    (automatically split into multiple parts if it exceeds
+                    Telegram's 4096-character limit)
+
+    NOTE: when using --update-stack, re-specify --message-mode if you use
+    a non-default mode, otherwise it will be reset to per_item.
 
 FEEDS FILE FORMAT:
     The feeds.json file should have this structure:
@@ -552,9 +563,10 @@ deploy_pipeline_stack() {
     local chat_id="$5"
     local bucket_name="$6"
     local model_selection="$7"
-    
+    local message_mode="$8"
+
     print_header "Deploying Pipeline Stack"
-    
+
     if [[ "$DRY_RUN" == "true" ]]; then
         print_status "[DRY RUN] Would deploy stack: $stack_name"
         print_status "Parameters:"
@@ -562,16 +574,18 @@ deploy_pipeline_stack() {
         print_status "  TelegramChatId: $chat_id"
         print_status "  ArtifactBucketName: $bucket_name"
         print_status "  BedrockModelSelection: $model_selection"
+        print_status "  MessageMode: $message_mode"
         return 0
     fi
-    
+
     print_status "Deploying stack: $stack_name"
     print_status "Template: $TEMPLATE_FILE"
     print_status "Region: $region"
     print_status "Model Selection: $model_selection"
-    
+    print_status "Message Mode: $message_mode"
+
     # Build parameter overrides
-    local params="BotName=$bot_name TelegramBotToken=$telegram_token TelegramChatId=$chat_id ArtifactBucketName=$bucket_name BedrockModelSelection=$model_selection"
+    local params="BotName=$bot_name TelegramBotToken=$telegram_token TelegramChatId=$chat_id ArtifactBucketName=$bucket_name BedrockModelSelection=$model_selection MessageMode=$message_mode"
     
     aws cloudformation deploy \
         --template-file "$TEMPLATE_FILE" \
@@ -658,6 +672,7 @@ main() {
     local feeds_file="$DEFAULT_FEEDS_FILE"
     local bucket_name=""
     local model_selection="nova-micro"
+    local message_mode="per_item"
     local dry_run="false"
     local cleanup_mode="false"
     local update_code_only="false"
@@ -697,6 +712,16 @@ main() {
                 if [[ "$model_selection" != "nova-micro" && "$model_selection" != "mistral-large" && "$model_selection" != "llama-3b" ]]; then
                     print_error "Invalid model selection: $model_selection"
                     print_error "Valid options are: nova-micro, mistral-large, llama-3b"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            -M|--message-mode)
+                message_mode="$2"
+                # Validate message mode
+                if [[ "$message_mode" != "per_item" && "$message_mode" != "digest" ]]; then
+                    print_error "Invalid message mode: $message_mode"
+                    print_error "Valid options are: per_item, digest"
                     exit 1
                 fi
                 shift 2
@@ -808,6 +833,7 @@ main() {
         if [[ -n "$model_selection" ]]; then
             print_status "Changing model to: $model_selection"
         fi
+        print_status "Message mode: $message_mode"
         
         if [[ "$dry_run" == "false" && "$skip_confirmation" == "false" ]]; then
             echo -e "\n${YELLOW}This will update the CloudFormation stack parameters.${NC}"
@@ -841,6 +867,9 @@ main() {
         else
             params="$params ParameterKey=BedrockModelSelection,UsePreviousValue=true"
         fi
+
+        # Message mode always has a value (defaults to per_item)
+        params="$params ParameterKey=MessageMode,ParameterValue=$message_mode"
         
         print_status "Updating CloudFormation stack..."
         aws cloudformation update-stack \
@@ -887,6 +916,7 @@ main() {
     echo "Feeds File: $feeds_file"
     echo "S3 Bucket: $bucket_name"
     echo "Model Selection: $model_selection"
+    echo "Message Mode: $message_mode"
     echo "Dry Run: $dry_run"
     
     if [[ "$dry_run" == "false" && "$skip_confirmation" == "false" ]]; then
@@ -902,7 +932,7 @@ main() {
     create_s3_bucket "$bucket_name" "$region"
     
     # Deploy stack (creates IAM roles)
-    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name" "$model_selection"
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name" "$model_selection" "$message_mode"
     
     # Apply bucket policy now that IAM roles exist
     apply_bucket_policy "$bucket_name" "$bot_name"

@@ -131,6 +131,26 @@ You can customize feeds by:
 
 See [FEEDS.md](FEEDS.md) for detailed instructions and examples.
 
+### Message Delivery Mode
+
+The bot supports two delivery modes for Telegram messages, controlled by the `MessageMode` CloudFormation parameter (env var `MESSAGE_MODE`):
+
+- **`per_item`** (default): one Telegram message for each news item, with per-item model metadata
+- **`digest`**: a single combined message with all the day's news, numbered and with an aggregate metadata footer (model used, total tokens). If the digest exceeds Telegram's 4096-character limit, it is automatically split into multiple parts at item boundaries
+
+```bash
+# Deploy with digest mode (single daily message)
+./scripts/deploy.sh \
+  --telegram-token "YOUR_BOT_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --message-mode digest
+
+# Switch an existing deployment to digest mode
+./scripts/deploy.sh --update-stack --message-mode digest
+```
+
+> Note: `--update-stack` resets the mode to `per_item` unless you pass `--message-mode` explicitly.
+
 ## Quick Start
 
 ### Prerequisites

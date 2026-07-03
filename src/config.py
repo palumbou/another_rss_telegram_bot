@@ -15,6 +15,7 @@ class TelegramConfig:
     parse_mode: str = "HTML"
     retry_attempts: int = 3
     backoff_factor: float = 2.0
+    message_mode: str = "per_item"  # "per_item" or "digest"
 
 
 @dataclass
@@ -50,6 +51,13 @@ class Config:
         self.dynamodb_table = os.getenv("DYNAMODB_TABLE", "rss-telegram-dedup")
         self.aws_region = os.getenv("CURRENT_AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
         self.bedrock_model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-micro-v1:0")
+
+        # Message delivery mode: "per_item" (one message per news item)
+        # or "digest" (a single combined message with all news items)
+        message_mode = os.getenv("MESSAGE_MODE", "per_item").strip().lower()
+        if message_mode not in ("per_item", "digest"):
+            message_mode = "per_item"
+        self.message_mode = message_mode
 
     def get_feed_urls(self) -> list[str]:
         """Get RSS feed URLs from feeds.json file."""
@@ -89,6 +97,7 @@ class Config:
         return TelegramConfig(
             bot_token="",  # Will be populated from Secrets Manager
             chat_id=self.chat_id,
+            message_mode=self.message_mode,
         )
 
     def get_bedrock_config(self) -> BedrockConfig:

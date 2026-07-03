@@ -131,6 +131,26 @@ Puoi personalizzare i feed:
 
 Vedi [FEEDS.IT.md](FEEDS.it.md) per istruzioni dettagliate ed esempi.
 
+### Modalità di Invio dei Messaggi
+
+Il bot supporta due modalità di invio dei messaggi Telegram, controllate dal parametro CloudFormation `MessageMode` (variabile d'ambiente `MESSAGE_MODE`):
+
+- **`per_item`** (predefinita): un messaggio Telegram per ogni notizia, con i metadati del modello per singola notizia
+- **`digest`**: un unico messaggio con tutte le notizie del giorno, numerate e con un footer aggregato dei metadati (modello usato, token totali). Se il digest supera il limite di 4096 caratteri di Telegram, viene diviso automaticamente in più parti senza spezzare le singole notizie
+
+```bash
+# Deploy con modalità digest (un solo messaggio giornaliero)
+./scripts/deploy.sh \
+  --telegram-token "IL_TUO_BOT_TOKEN" \
+  --chat-id "IL_TUO_CHAT_ID" \
+  --message-mode digest
+
+# Passare un deployment esistente alla modalità digest
+./scripts/deploy.sh --update-stack --message-mode digest
+```
+
+> Nota: `--update-stack` reimposta la modalità a `per_item` se non passi esplicitamente `--message-mode`.
+
 ## Avvio Rapido
 
 ### Prerequisiti

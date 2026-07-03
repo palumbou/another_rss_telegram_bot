@@ -55,6 +55,15 @@ Parameters:
       - 'llama-3b'
     Description: 'AI model for summarization (nova-micro: cost-optimized, mistral-large: best multilingual, llama-3b: quality-optimized)'
   
+  # Telegram delivery configuration
+  MessageMode:
+    Type: String
+    Default: 'per_item'
+    AllowedValues:
+      - 'per_item'
+      - 'digest'
+    Description: 'Telegram delivery mode (per_item: one message per news item, digest: a single combined message with all news)'
+
   # Infrastructure configuration
   DynamoDBTTLDays:
     Type: Number
@@ -386,6 +395,7 @@ Resources:
               - !FindInMap [BedrockInferenceProfiles, !Ref 'AWS::Region', MistralModel]
               - !FindInMap [BedrockInferenceProfiles, !Ref 'AWS::Region', LlamaProfile]
           CURRENT_AWS_REGION: !Ref AWS::Region
+          MESSAGE_MODE: !Ref MessageMode
           LOG_LEVEL: INFO
       DeadLetterConfig:
         TargetArn: !GetAtt DeadLetterQueue.Arn

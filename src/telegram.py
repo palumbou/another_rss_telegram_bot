@@ -14,6 +14,9 @@ from .models import Summary
 class TelegramPublisher:
     """Handles publishing messages to Telegram."""
 
+    # Telegram hard limit is 4096 characters per message; keep a safety margin
+    MAX_MESSAGE_LENGTH = 4000
+
     def __init__(self, config: TelegramConfig, execution_id: str | None = None):
         """Initialize Telegram publisher with configuration."""
         self.config = config
@@ -100,40 +103,12 @@ class TelegramPublisher:
         # Add model metadata if available
         if summary.model_used:
             message += f"\n\n<code>━━━━━━━━━━━━━━━━━━━━</code>"
-            
-            # Format model name
-            model_display = summary.model_used
-            if "amazon.nova" in model_display.lower():
-                if "nova-2-pro" in model_display.lower():
-                    model_display = "Amazon Nova 2 Pro"
-                elif "nova-2-lite" in model_display.lower():
-                    model_display = "Amazon Nova 2 Lite"
-                elif "nova-2-sonic" in model_display.lower():
-                    model_display = "Amazon Nova 2 Sonic"
-                else:
-                    model_display = "Amazon Nova Micro"
-            elif "mistral" in model_display.lower():
-                if "large-3" in model_display.lower():
-                    model_display = "Mistral Large 3 (675B MoE)"
-                elif "large-2402" in model_display.lower():
-                    model_display = "Mistral Large (24.02)"
-                elif "large-2407" in model_display.lower():
-                    model_display = "Mistral Large (24.07)"
-                else:
-                    model_display = "Mistral Large"
-            elif "llama" in model_display.lower():
-                model_display = "Llama 3.2 3B"
-            elif model_display == "fallback":
-                model_display = "Extractive (Fallback)"
-            elif model_display == "error":
-                model_display = "Error (Emergency Fallback)"
-            
-            message += f"\n🤖 <i>Modello: {model_display}</i>"
-            
+            message += f"\n🤖 <i>Modello: {self._format_model_name(summary.model_used)}</i>"
+
             # Add tokens if available
             if summary.tokens_used is not None:
                 message += f"\n🔢 <i>Token: {summary.tokens_used}</i>"
-            
+
             # Add response time if available
             if summary.response_time_ms is not None:
                 if summary.response_time_ms < 1000:
@@ -143,6 +118,155 @@ class TelegramPublisher:
                 message += f"\n⚡ <i>Tempo: {time_display}</i>"
 
         return message
+
+    def send_digest(self, entries: list[tuple[Summary, str, str]]) -> int:
+        """
+        Send all news items as a single combined digest message.
+
+        If the digest exceeds Telegram's message length limit, it is split
+        into multiple parts at item boundaries (HTML is never broken mid-tag).
+
+        Args:
+            entries: List of (summary, original_link, source_url) tuples
+
+        Returns:
+            Number of Telegram messages successfully sent (0 on failure)
+        """
+        if not entries:
+            return 0
+
+        try:
+            messages = self._build_digest_messages(entries)
+            self.logger.info(
+                "Sending digest",
+                item_count=len(entries),
+                message_count=len(messages),
+            )
+
+            sent = 0
+            for message in messages:
+                if self._send_telegram_message(message):
+                    sent += 1
+                else:
+                    self.logger.error(
+                        "Failed to send digest part",
+                        part=sent + 1,
+                        total_parts=len(messages),
+                    )
+
+            return sent
+        except Exception as e:
+            self.logger.error(f"Failed to send digest: {e}", error=str(e))
+            return 0
+
+    def _build_digest_messages(
+        self, entries: list[tuple[Summary, str, str]]
+    ) -> list[str]:
+        """
+        Build the digest message(s), splitting at item boundaries when the
+        Telegram length limit would be exceeded.
+
+        Args:
+            entries: List of (summary, original_link, source_url) tuples
+
+        Returns:
+            List of formatted HTML messages ready to send
+        """
+        header = f"📬 <b>Rassegna del giorno — {len(entries)} notizie</b>\n\n"
+        footer = self._format_digest_footer(entries)
+
+        blocks = [
+            self._format_digest_entry(i + 1, summary, link, source_url)
+            for i, (summary, link, source_url) in enumerate(entries)
+        ]
+
+        messages = []
+        current = header
+        for block in blocks:
+            candidate = current + block if current else block
+            if len(candidate) + len(footer) > self.MAX_MESSAGE_LENGTH and current not in ("", header):
+                messages.append(current.rstrip())
+                current = block
+            else:
+                current = candidate
+        if current:
+            messages.append((current + footer).rstrip())
+
+        # Mark parts when the digest is split across multiple messages
+        if len(messages) > 1:
+            messages = [
+                f"{msg}\n\n<i>(parte {i + 1}/{len(messages)})</i>"
+                for i, msg in enumerate(messages)
+            ]
+
+        return messages
+
+    def _format_digest_entry(
+        self, index: int, summary: Summary, link: str, source_url: str
+    ) -> str:
+        """Format a single news item as a compact digest block."""
+        title = self._escape_html(summary.title)
+        bullets = [self._escape_html(bullet) for bullet in summary.bullets]
+        why_it_matters = self._escape_html(summary.why_it_matters)
+
+        block = f"<b>{index}. {title}</b>\n"
+        for bullet in bullets:
+            block += f"• {bullet}\n"
+        block += f"<i>Perché conta:</i> {why_it_matters}\n"
+        block += f'🔗 <a href="{link}">Leggi l\'articolo completo</a>'
+
+        if source_url:
+            source_name = self._extract_source_name(source_url)
+            if source_name:
+                block += f" — 📰 <i>{source_name}</i>"
+
+        return block + "\n\n"
+
+    def _format_digest_footer(self, entries: list[tuple[Summary, str, str]]) -> str:
+        """Format a single aggregate metadata footer for the digest."""
+        summaries = [entry[0] for entry in entries]
+        model_used = next((s.model_used for s in summaries if s.model_used), None)
+        if not model_used:
+            return ""
+
+        footer = "\n<code>━━━━━━━━━━━━━━━━━━━━</code>"
+        footer += f"\n🤖 <i>Modello: {self._format_model_name(model_used)}</i>"
+
+        total_tokens = sum(s.tokens_used for s in summaries if s.tokens_used is not None)
+        if total_tokens:
+            footer += f"\n🔢 <i>Token totali: {total_tokens}</i>"
+
+        return footer
+
+    def _format_model_name(self, model_used: str) -> str:
+        """Map a model ID to a human-friendly display name."""
+        model_display = model_used
+        if "amazon.nova" in model_display.lower():
+            if "nova-2-pro" in model_display.lower():
+                model_display = "Amazon Nova 2 Pro"
+            elif "nova-2-lite" in model_display.lower():
+                model_display = "Amazon Nova 2 Lite"
+            elif "nova-2-sonic" in model_display.lower():
+                model_display = "Amazon Nova 2 Sonic"
+            else:
+                model_display = "Amazon Nova Micro"
+        elif "mistral" in model_display.lower():
+            if "large-3" in model_display.lower():
+                model_display = "Mistral Large 3 (675B MoE)"
+            elif "large-2402" in model_display.lower():
+                model_display = "Mistral Large (24.02)"
+            elif "large-2407" in model_display.lower():
+                model_display = "Mistral Large (24.07)"
+            else:
+                model_display = "Mistral Large"
+        elif "llama" in model_display.lower():
+            model_display = "Llama 3.2 3B"
+        elif model_display == "fallback":
+            model_display = "Extractive (Fallback)"
+        elif model_display == "error":
+            model_display = "Error (Emergency Fallback)"
+
+        return model_display
 
     def handle_rate_limit(self, retry_count: int) -> None:
         """

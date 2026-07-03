@@ -134,6 +134,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         )
 
         # Process items through the pipeline
+        digest_mode = telegram_config.message_mode == "digest"
+        digest_entries = []
         for item in filtered_items:
             try:
                 # Generate unique ID for deduplication
@@ -153,6 +155,11 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 metrics["items_summarized"] += 1
                 main_logger.log_item_processing(item.title, "summarized")
 
+                if digest_mode:
+                    # Collect for a single combined message sent after the loop
+                    digest_entries.append((summary, item.link, item.feed_url))
+                    continue
+
                 # Send to Telegram
                 success = telegram_publisher.send_message(summary, item.link, item.feed_url)
                 if success:
@@ -169,6 +176,21 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 metrics["errors"].append(error_msg)
                 # Continue with other items (Requirement 10.4)
                 continue
+
+        # In digest mode, send all collected summaries as a single message
+        if digest_mode and digest_entries:
+            messages_sent = telegram_publisher.send_digest(digest_entries)
+            if messages_sent > 0:
+                metrics["messages_sent"] += messages_sent
+                main_logger.info(
+                    f"Digest sent with {len(digest_entries)} items in {messages_sent} message(s)",
+                    item_count=len(digest_entries),
+                    message_count=messages_sent,
+                )
+            else:
+                error_msg = f"Failed to send digest with {len(digest_entries)} items"
+                main_logger.error(error_msg, item_count=len(digest_entries))
+                metrics["errors"].append(error_msg)
 
         # Log final metrics
         main_logger.log_metrics(metrics)
