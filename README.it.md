@@ -14,7 +14,7 @@ Questo progetto è un **esperimento con Kiro AI** per esplorare lo sviluppo assi
 - **Filtro 24 Ore**: Elabora solo item pubblicati nelle ultime 24 ore
 - **Deduplicazione**: Evita contenuti duplicati usando DynamoDB
 - **Riassunti AI**: Genera riassunti in italiano usando Amazon Bedrock Nova Micro con fallback
-- **Integrazione Telegram**: Invio automatico di messaggi formattati
+- **Integrazione Telegram**: Invio automatico di messaggi formattati, con invio opzionale in uno specifico topic di un supergruppo
 - **Gestione Errori**: Gestione robusta degli errori con Dead Letter Queue
 - **Logging Strutturato**: Sistema di logging completo per debugging
 - **Monitoraggio**: Dashboard CloudWatch e metriche personalizzate
@@ -151,6 +151,23 @@ Il bot supporta due modalità di invio dei messaggi Telegram, controllate dal pa
 
 > Nota: `--update-stack` reimposta la modalità a `per_item` se non passi esplicitamente `--message-mode`.
 
+### Supporto ai Topic dei Forum
+
+Il bot può opzionalmente inviare i messaggi in uno specifico topic di un supergruppo Telegram con topic (forum) abilitati, controllato dal parametro CloudFormation `TelegramTopicId` (variabile d'ambiente `TELEGRAM_TOPIC_ID`). Lascialo vuoto (default) per mantenere il comportamento attuale e inviare sulla chat o sul topic General.
+
+```bash
+# Deploy con invio dei messaggi in uno specifico topic
+./scripts/deploy.sh \
+  --telegram-token "IL_TUO_BOT_TOKEN" \
+  --chat-id "IL_TUO_CHAT_ID" \
+  --topic-id "13"
+
+# Spostare un deployment esistente su un topic
+./scripts/deploy.sh --update-stack --topic-id "13"
+```
+
+> Nota: il bot deve essere amministratore del gruppo con il permesso **Gestisci argomenti** (`can_manage_topics`), altrimenti l'API Telegram restituisce `TOPIC_CLOSED` sui topic chiusi. L'ID del topic è il secondo segmento numerico del link al topic (es. `https://t.me/c/1234567890/13` → topic ID `13`). Come per `--message-mode`, `--update-stack` reimposta il topic se non passi esplicitamente `--topic-id`.
+
 ## Avvio Rapido
 
 ### Prerequisiti
@@ -186,6 +203,12 @@ Il bot supporta due modalità di invio dei messaggi Telegram, controllate dal pa
   --telegram-token "TUO_BOT_TOKEN" \
   --chat-id "TUO_CHAT_ID" \
   --feeds-file /percorso/al/mio-feeds.json
+
+# Invio dei messaggi in uno specifico topic di un supergruppo
+./scripts/deploy.sh \
+  --telegram-token "TUO_BOT_TOKEN" \
+  --chat-id "TUO_CHAT_ID" \
+  --topic-id "13"
 
 # Salta prompt di conferma
 ./scripts/deploy.sh \

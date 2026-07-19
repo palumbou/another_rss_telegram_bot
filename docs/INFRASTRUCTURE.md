@@ -173,6 +173,7 @@ The Lambda function uses these environment variables (managed by CloudFormation)
 
 - `TELEGRAM_SECRET_NAME`: Secrets Manager secret name
 - `TELEGRAM_CHAT_ID`: Target chat/channel ID
+- `TELEGRAM_TOPIC_ID`: Optional forum topic ID (`message_thread_id`) for supergroups with topics enabled; empty = send to the chat or the General topic
 - `DYNAMODB_TABLE`: DynamoDB table name
 - `RSS_FEED_URLS`: Comma-separated feed URLs
 - `CURRENT_AWS_REGION`: AWS region
@@ -185,9 +186,12 @@ The Lambda function uses these environment variables (managed by CloudFormation)
 | `BotName` | Resource naming prefix | `another-rss-telegram-bot` |
 | `TelegramBotToken` | Bot token (stored in Secrets Manager) | Required |
 | `TelegramChatId` | Target chat ID | Required |
+| `TelegramTopicId` | Optional forum topic ID (numeric); empty = chat/General topic | `''` (empty) |
 | `RSSFeedUrls` | Comma-separated feed URLs | AWS feeds |
 | `ScheduleExpression` | Cron expression | `cron(0 9 * * ? *)` |
 | `ScheduleTimezone` | Timezone | `Europe/Rome` |
+
+> **Note on `TelegramTopicId`**: to publish into a forum topic, the bot must be an administrator of the supergroup with the **Manage Topics** permission (`can_manage_topics`), otherwise the Telegram API returns `TOPIC_CLOSED` on closed topics. The topic ID is the second numeric segment of the topic link (e.g. `https://t.me/c/1234567890/13` → topic ID `13`).
 
 ## Monitoring
 

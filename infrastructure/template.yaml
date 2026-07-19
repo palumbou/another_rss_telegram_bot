@@ -16,7 +16,14 @@ Parameters:
     Description: 'Telegram chat ID where messages will be sent'
     AllowedPattern: '^-?[0-9]+$'
     ConstraintDescription: 'Must be a valid Telegram chat ID (numeric)'
-  
+
+  TelegramTopicId:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[0-9]*$'
+    Description: 'Optional forum topic ID (message_thread_id) for supergroups with topics enabled. Leave empty to send to the chat or the General topic.'
+    ConstraintDescription: 'Must be a numeric topic ID or empty'
+
   TelegramBotToken:
     Type: String
     Description: 'Telegram bot token (will be stored securely in Secrets Manager)'
@@ -376,6 +383,7 @@ Resources:
         Variables:
           TELEGRAM_SECRET_NAME: !Ref TelegramSecretName
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
+          TELEGRAM_TOPIC_ID: !Ref TelegramTopicId
           DYNAMODB_TABLE: !Ref DeduplicationTable
           BEDROCK_MODEL_ID: !If
             - UseNovaMicro

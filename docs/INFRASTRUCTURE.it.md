@@ -173,6 +173,7 @@ La funzione Lambda usa queste variabili (gestite da CloudFormation):
 
 - `TELEGRAM_SECRET_NAME`: Nome secret Secrets Manager
 - `TELEGRAM_CHAT_ID`: ID chat/canale target
+- `TELEGRAM_TOPIC_ID`: ID opzionale del topic (`message_thread_id`) per supergruppi con topic abilitati; vuoto = invio sulla chat o sul topic General
 - `DYNAMODB_TABLE`: Nome tabella DynamoDB
 - `RSS_FEED_URLS`: URL feed separati da virgola
 - `CURRENT_AWS_REGION`: Regione AWS
@@ -185,9 +186,12 @@ La funzione Lambda usa queste variabili (gestite da CloudFormation):
 | `BotName` | Prefisso naming risorse | `another-rss-telegram-bot` |
 | `TelegramBotToken` | Token bot (in Secrets Manager) | Richiesto |
 | `TelegramChatId` | ID chat target | Richiesto |
+| `TelegramTopicId` | ID opzionale del topic (numerico); vuoto = chat/topic General | `''` (vuoto) |
 | `RSSFeedUrls` | URL feed separati da virgola | Feed AWS |
 | `ScheduleExpression` | Espressione cron | `cron(0 9 * * ? *)` |
 | `ScheduleTimezone` | Timezone | `Europe/Rome` |
+
+> **Nota su `TelegramTopicId`**: per pubblicare in un topic il bot deve essere amministratore del supergruppo con il permesso **Gestisci argomenti** (`can_manage_topics`), altrimenti l'API Telegram restituisce `TOPIC_CLOSED` sui topic chiusi. L'ID del topic è il secondo segmento numerico del link al topic (es. `https://t.me/c/1234567890/13` → topic ID `13`).
 
 ## Monitoraggio
 

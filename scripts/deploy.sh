@@ -63,6 +63,9 @@ OPTIONS:
     -b, --bot-name BOT_NAME         Bot name for resource naming (default: $DEFAULT_BOT_NAME)
     -t, --telegram-token TOKEN      Telegram bot token (required for initial deploy)
     -c, --chat-id CHAT_ID           Telegram chat ID (required for initial deploy)
+    -T, --topic-id TOPIC_ID         Telegram forum topic ID (optional, sends messages
+                                    to a specific topic of a supergroup with topics enabled;
+                                    leave unset to send to the chat or the General topic)
     -f, --feeds-file FILE           Path to feeds.json file (optional, uses default if not provided)
     -m, --model MODEL               AI model selection: nova-micro (default), mistral-large, or llama-3b
     -M, --message-mode MODE         Telegram delivery mode: per_item (default) or digest
@@ -95,7 +98,14 @@ EXAMPLES:
     # Initial deployment with custom feeds file and Nova Micro
     $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
        --feeds-file /path/to/my-feeds.json --model nova-micro
-    
+
+    # Initial deployment sending messages to a specific forum topic
+    $0 --telegram-token "123456:ABC-DEF..." --chat-id "-1001234567890" \\
+       --topic-id "13"
+
+    # Move the bot to a forum topic on an existing deployment
+    $0 --update-stack --topic-id "13"
+
     # Update code only (triggers pipeline)
     $0 --update-code
     
@@ -131,6 +141,17 @@ MESSAGE MODE:
 
     NOTE: when using --update-stack, re-specify --message-mode if you use
     a non-default mode, otherwise it will be reset to per_item.
+
+TOPIC ID:
+    When --topic-id is set, messages are sent to that topic of a supergroup
+    with topics (forum) enabled. The topic ID is the second numeric segment
+    of the topic link (e.g. https://t.me/c/1234567890/13 -> topic ID 13).
+    The bot must be an administrator of the group with the "Manage Topics"
+    permission (can_manage_topics), otherwise the Telegram API returns
+    TOPIC_CLOSED on closed topics.
+
+    NOTE: when using --update-stack, re-specify --topic-id if you use one,
+    otherwise it will be reset (messages go back to the chat/General topic).
 
 FEEDS FILE FORMAT:
     The feeds.json file should have this structure:
@@ -564,6 +585,7 @@ deploy_pipeline_stack() {
     local bucket_name="$6"
     local model_selection="$7"
     local message_mode="$8"
+    local topic_id="$9"
 
     print_header "Deploying Pipeline Stack"
 
@@ -572,6 +594,7 @@ deploy_pipeline_stack() {
         print_status "Parameters:"
         print_status "  BotName: $bot_name"
         print_status "  TelegramChatId: $chat_id"
+        print_status "  TelegramTopicId: ${topic_id:-<none>}"
         print_status "  ArtifactBucketName: $bucket_name"
         print_status "  BedrockModelSelection: $model_selection"
         print_status "  MessageMode: $message_mode"
@@ -583,9 +606,12 @@ deploy_pipeline_stack() {
     print_status "Region: $region"
     print_status "Model Selection: $model_selection"
     print_status "Message Mode: $message_mode"
+    if [[ -n "$topic_id" ]]; then
+        print_status "Topic ID: $topic_id"
+    fi
 
     # Build parameter overrides
-    local params="BotName=$bot_name TelegramBotToken=$telegram_token TelegramChatId=$chat_id ArtifactBucketName=$bucket_name BedrockModelSelection=$model_selection MessageMode=$message_mode"
+    local params="BotName=$bot_name TelegramBotToken=$telegram_token TelegramChatId=$chat_id TelegramTopicId=$topic_id ArtifactBucketName=$bucket_name BedrockModelSelection=$model_selection MessageMode=$message_mode"
     
     aws cloudformation deploy \
         --template-file "$TEMPLATE_FILE" \
@@ -669,6 +695,7 @@ main() {
     local bot_name="$DEFAULT_BOT_NAME"
     local telegram_token=""
     local chat_id=""
+    local topic_id=""
     local feeds_file="$DEFAULT_FEEDS_FILE"
     local bucket_name=""
     local model_selection="nova-micro"
@@ -700,6 +727,16 @@ main() {
                 ;;
             -c|--chat-id)
                 chat_id="$2"
+                shift 2
+                ;;
+            -T|--topic-id)
+                topic_id="$2"
+                # Validate topic ID (must be numeric)
+                if [[ ! "$topic_id" =~ ^[0-9]+$ ]]; then
+                    print_error "Invalid topic ID: $topic_id"
+                    print_error "Topic ID must be a positive integer (e.g. 13)"
+                    exit 1
+                fi
                 shift 2
                 ;;
             -f|--feeds-file)
@@ -834,6 +871,10 @@ main() {
             print_status "Changing model to: $model_selection"
         fi
         print_status "Message mode: $message_mode"
+        if [[ -n "$chat_id" ]]; then
+            print_status "Changing chat ID to: $chat_id"
+        fi
+        print_status "Topic ID: ${topic_id:-<none, chat/General topic>}"
         
         if [[ "$dry_run" == "false" && "$skip_confirmation" == "false" ]]; then
             echo -e "\n${YELLOW}This will update the CloudFormation stack parameters.${NC}"
@@ -852,7 +893,6 @@ main() {
         # Build parameters array - use previous values for all except what's specified
         local params="ParameterKey=BotName,UsePreviousValue=true"
         params="$params ParameterKey=TelegramBotToken,UsePreviousValue=true"
-        params="$params ParameterKey=TelegramChatId,UsePreviousValue=true"
         params="$params ParameterKey=ArtifactBucketName,UsePreviousValue=true"
         params="$params ParameterKey=LambdaTimeout,UsePreviousValue=true"
         params="$params ParameterKey=LambdaMemorySize,UsePreviousValue=true"
@@ -861,6 +901,13 @@ main() {
         params="$params ParameterKey=DynamoDBTTLDays,UsePreviousValue=true"
         params="$params ParameterKey=LogRetentionDays,UsePreviousValue=true"
         
+        # Override chat ID if specified, otherwise keep the current one
+        if [[ -n "$chat_id" ]]; then
+            params="$params ParameterKey=TelegramChatId,ParameterValue=$chat_id"
+        else
+            params="$params ParameterKey=TelegramChatId,UsePreviousValue=true"
+        fi
+
         # Override model selection if specified
         if [[ -n "$model_selection" ]]; then
             params="$params ParameterKey=BedrockModelSelection,ParameterValue=$model_selection"
@@ -870,6 +917,10 @@ main() {
 
         # Message mode always has a value (defaults to per_item)
         params="$params ParameterKey=MessageMode,ParameterValue=$message_mode"
+
+        # Topic ID always passed explicitly: UsePreviousValue=true would fail
+        # on stacks created before this parameter existed
+        params="$params ParameterKey=TelegramTopicId,ParameterValue=$topic_id"
         
         print_status "Updating CloudFormation stack..."
         aws cloudformation update-stack \
@@ -913,6 +964,7 @@ main() {
     echo "Region: $region"
     echo "Bot Name: $bot_name"
     echo "Chat ID: $chat_id"
+    echo "Topic ID: ${topic_id:-<none, chat/General topic>}"
     echo "Feeds File: $feeds_file"
     echo "S3 Bucket: $bucket_name"
     echo "Model Selection: $model_selection"
@@ -932,7 +984,7 @@ main() {
     create_s3_bucket "$bucket_name" "$region"
     
     # Deploy stack (creates IAM roles)
-    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name" "$model_selection" "$message_mode"
+    deploy_pipeline_stack "$stack_name" "$region" "$bot_name" "$telegram_token" "$chat_id" "$bucket_name" "$model_selection" "$message_mode" "$topic_id"
     
     # Apply bucket policy now that IAM roles exist
     apply_bucket_policy "$bucket_name" "$bot_name"

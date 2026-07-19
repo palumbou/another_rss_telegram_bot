@@ -15,7 +15,14 @@ Parameters:
   TelegramChatId:
     Type: String
     Description: 'Telegram chat ID'
-  
+
+  TelegramTopicId:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[0-9]*$'
+    Description: 'Optional forum topic ID (message_thread_id) for supergroups with topics enabled. Leave empty to send to the chat or the General topic.'
+    ConstraintDescription: 'Must be a numeric topic ID or empty'
+
   ArtifactBucketName:
     Type: String
     Description: 'Name of the S3 bucket for artifacts'
@@ -386,6 +393,7 @@ Resources:
         Variables:
           TELEGRAM_SECRET_NAME: !Ref TelegramSecret
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
+          TELEGRAM_TOPIC_ID: !Ref TelegramTopicId
           DYNAMODB_TABLE: !Ref DeduplicationTable
           BEDROCK_MODEL_ID: !If
             - UseNovaMicro

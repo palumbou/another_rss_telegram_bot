@@ -14,7 +14,7 @@ This project is a **Kiro AI experiment** exploring AI-assisted development from 
 - **24-Hour Filter**: Processes only items published in the last 24 hours
 - **Deduplication**: Prevents duplicate content using DynamoDB
 - **AI Summaries**: Generates Italian summaries using Amazon Bedrock Nova Micro with fallback
-- **Telegram Integration**: Automatic formatted message delivery
+- **Telegram Integration**: Automatic formatted message delivery, with optional delivery to a specific forum topic of a supergroup
 - **Error Handling**: Robust error management with Dead Letter Queue
 - **Structured Logging**: Complete logging system for debugging
 - **Monitoring**: CloudWatch dashboard and custom metrics
@@ -151,6 +151,23 @@ The bot supports two delivery modes for Telegram messages, controlled by the `Me
 
 > Note: `--update-stack` resets the mode to `per_item` unless you pass `--message-mode` explicitly.
 
+### Forum Topic Support
+
+The bot can optionally send messages to a specific topic of a Telegram supergroup with topics (forum) enabled, controlled by the `TelegramTopicId` CloudFormation parameter (env var `TELEGRAM_TOPIC_ID`). Leave it empty (default) to keep the current behavior and send to the chat or the General topic.
+
+```bash
+# Deploy sending messages to a specific forum topic
+./scripts/deploy.sh \
+  --telegram-token "YOUR_BOT_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --topic-id "13"
+
+# Move an existing deployment to a forum topic
+./scripts/deploy.sh --update-stack --topic-id "13"
+```
+
+> Note: the bot must be an administrator of the group with the **Manage Topics** permission (`can_manage_topics`), otherwise the Telegram API returns `TOPIC_CLOSED` on closed topics. The topic ID is the second numeric segment of the topic link (e.g. `https://t.me/c/1234567890/13` → topic ID `13`). As with `--message-mode`, `--update-stack` resets the topic unless you pass `--topic-id` explicitly.
+
 ## Quick Start
 
 ### Prerequisites
@@ -186,6 +203,12 @@ The bot supports two delivery modes for Telegram messages, controlled by the `Me
   --telegram-token "YOUR_BOT_TOKEN" \
   --chat-id "YOUR_CHAT_ID" \
   --feeds-file /path/to/my-feeds.json
+
+# Send messages to a specific forum topic of a supergroup
+./scripts/deploy.sh \
+  --telegram-token "YOUR_BOT_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --topic-id "13"
 
 # Skip confirmation prompts
 ./scripts/deploy.sh \

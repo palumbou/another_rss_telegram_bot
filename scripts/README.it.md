@@ -54,6 +54,7 @@ Lo script automatizza i seguenti passaggi:
 | `--bot-name` | Nome bot per risorse | `another-rss-telegram-bot` | No |
 | `--telegram-token` | Token bot Telegram | - | **Sì** (iniziale) |
 | `--chat-id` | ID chat Telegram | - | **Sì** (iniziale) |
+| `--topic-id` | ID topic del forum (invia i messaggi in uno specifico topic di un supergruppo con topic abilitati) | Vuoto (chat/topic General) | No |
 | `--feeds-file` | Percorso file feeds.json | Feed predefiniti | No |
 | `--bucket` | Nome bucket S3 | Auto-generato | No |
 | `--update-code` | Aggiorna solo codice | false | No |
@@ -108,6 +109,20 @@ Vedi [FEEDS.IT.md](../FEEDS.IT.md) per il formato del file feed ed esempi.
 ./scripts/deploy.sh --cleanup --region "eu-west-1" --yes
 ```
 
+#### 7. Invio in un Topic del Forum
+```bash
+# Deployment iniziale con invio in uno specifico topic
+./scripts/deploy.sh \
+  --telegram-token "TUO_TOKEN" \
+  --chat-id "TUO_CHAT_ID" \
+  --topic-id "13"
+
+# Spostare un deployment esistente su un topic (o tornare indietro: ometti --topic-id)
+./scripts/deploy.sh --update-stack --topic-id "13"
+```
+
+> Nota: `--update-stack` reimposta il topic se non passi esplicitamente `--topic-id`. Se con `--update-stack` fornisci anche `--chat-id`, viene aggiornata anche la chat; altrimenti viene mantenuta quella attuale.
+
 ### Come Ottenere i Parametri Richiesti
 
 #### Token Bot Telegram
@@ -122,6 +137,12 @@ Vedi [FEEDS.IT.md](../FEEDS.IT.md) per il formato del file feed ed esempi.
 3. Visita: `https://api.telegram.org/bot<TUO_BOT_TOKEN>/getUpdates`
 4. Trova il campo `"chat":{"id":...}` nella risposta
 5. Usa l'ID trovato (i canali iniziano con `-100`)
+
+#### ID Topic Telegram (opzionale)
+1. Abilita i topic (forum) nel tuo supergruppo e apri il topic desiderato
+2. Copia il link del topic: l'ID del topic è il secondo segmento numerico (es. `https://t.me/c/1234567890/13` → topic ID `13`)
+3. Rendi il bot amministratore del gruppo con il permesso **Gestisci argomenti** (`can_manage_topics`), altrimenti l'API Telegram restituisce `TOPIC_CLOSED` sui topic chiusi
+4. Passalo con `--topic-id "13"`; lascialo non impostato per inviare sulla chat o sul topic General
 
 ### Workflow di Deployment
 

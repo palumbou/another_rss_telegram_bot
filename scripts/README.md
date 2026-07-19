@@ -54,6 +54,7 @@ The script automates the following steps:
 | `--bot-name` | Bot name for resources | `another-rss-telegram-bot` | No |
 | `--telegram-token` | Telegram bot token | - | **Yes** (initial) |
 | `--chat-id` | Telegram chat ID | - | **Yes** (initial) |
+| `--topic-id` | Forum topic ID (sends messages to a specific topic of a supergroup with topics enabled) | Empty (chat/General topic) | No |
 | `--feeds-file` | Path to feeds.json file | Default feeds | No |
 | `--bucket` | S3 bucket name | Auto-generated | No |
 | `--update-code` | Update code only | false | No |
@@ -108,6 +109,20 @@ See [FEEDS.md](../FEEDS.md) for feed file format and examples.
 ./scripts/deploy.sh --cleanup --region "eu-west-1" --yes
 ```
 
+#### 7. Send to a Forum Topic
+```bash
+# Initial deployment targeting a specific topic
+./scripts/deploy.sh \
+  --telegram-token "YOUR_TOKEN" \
+  --chat-id "YOUR_CHAT_ID" \
+  --topic-id "13"
+
+# Move an existing deployment to a topic (or back: omit --topic-id)
+./scripts/deploy.sh --update-stack --topic-id "13"
+```
+
+> Note: `--update-stack` resets the topic unless you pass `--topic-id` explicitly. When `--chat-id` is provided with `--update-stack`, the chat is updated too; otherwise the current one is kept.
+
 ### How to Get Required Parameters
 
 #### Telegram Bot Token
@@ -122,6 +137,12 @@ See [FEEDS.md](../FEEDS.md) for feed file format and examples.
 3. Visit: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
 4. Find the `"chat":{"id":...}` field in the response
 5. Use the ID found (channels start with `-100`)
+
+#### Telegram Topic ID (optional)
+1. Enable topics (forum) in your supergroup and open the desired topic
+2. Copy the topic link: the topic ID is the second numeric segment (e.g. `https://t.me/c/1234567890/13` → topic ID `13`)
+3. Make the bot an administrator of the group with the **Manage Topics** permission (`can_manage_topics`), otherwise the Telegram API returns `TOPIC_CLOSED` on closed topics
+4. Pass it with `--topic-id "13"`; leave unset to send to the chat or the General topic
 
 ### Deployment Workflow
 

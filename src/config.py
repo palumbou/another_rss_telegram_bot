@@ -12,6 +12,7 @@ class TelegramConfig:
 
     bot_token: str
     chat_id: str
+    message_thread_id: str = ""  # Forum topic ID; empty = send to chat/General topic
     parse_mode: str = "HTML"
     retry_attempts: int = 3
     backoff_factor: float = 2.0
@@ -48,6 +49,7 @@ class Config:
             "TELEGRAM_SECRET_NAME", "rss-telegram-bot-token"
         )
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        self.message_thread_id = os.getenv("TELEGRAM_TOPIC_ID", "").strip()
         self.dynamodb_table = os.getenv("DYNAMODB_TABLE", "rss-telegram-dedup")
         self.aws_region = os.getenv("CURRENT_AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
         self.bedrock_model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-micro-v1:0")
@@ -97,6 +99,7 @@ class Config:
         return TelegramConfig(
             bot_token="",  # Will be populated from Secrets Manager
             chat_id=self.chat_id,
+            message_thread_id=self.message_thread_id,
             message_mode=self.message_mode,
         )
 

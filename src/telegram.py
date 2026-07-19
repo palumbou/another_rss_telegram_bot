@@ -26,6 +26,7 @@ class TelegramPublisher:
         self.logger.info(
             "TelegramPublisher initialized",
             chat_id=config.chat_id,
+            message_thread_id=config.message_thread_id,
             parse_mode=config.parse_mode,
             retry_attempts=config.retry_attempts,
         )
@@ -301,6 +302,17 @@ class TelegramPublisher:
             "parse_mode": self.config.parse_mode,
             "disable_web_page_preview": False,
         }
+
+        # Optional forum topic targeting: only add the field when configured,
+        # so the payload stays identical to previous versions otherwise
+        if self.config.message_thread_id:
+            try:
+                data["message_thread_id"] = int(self.config.message_thread_id)
+            except ValueError:
+                self.logger.warning(
+                    "Invalid message_thread_id, sending without topic targeting",
+                    message_thread_id=self.config.message_thread_id,
+                )
 
         for attempt in range(self.config.retry_attempts):
             try:
