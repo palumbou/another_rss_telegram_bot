@@ -128,7 +128,7 @@ Mappings:
       NovaProfile: 'us.amazon.nova-micro-v1:0'
       MistralModel: 'mistral.mistral-large-3-675b-instruct'
       LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
-    # Regions with Mistral Large 24.02 (fallback, text-only)
+    # Regions with Mistral Large 24.02 (fallback, text-only) or Pixtral Large 25.02 (EU profile)
     us-west-1:
       NovaProfile: 'us.amazon.nova-micro-v1:0'
       MistralModel: 'mistral.mistral-large-2402-v1:0'
@@ -143,15 +143,15 @@ Mappings:
       LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
     eu-west-1:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     eu-west-2:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     eu-west-3:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     # Other regions - use US profiles for Nova/Llama, Large 24.02 for Mistral where available
     ap-northeast-2:
@@ -196,27 +196,27 @@ Mappings:
       LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
     eu-central-1:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     eu-central-2:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     eu-north-1:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     eu-south-1:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     eu-south-2:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     il-central-1:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
     me-central-1:
       NovaProfile: 'us.amazon.nova-micro-v1:0'
@@ -232,7 +232,7 @@ Mappings:
       LlamaProfile: 'us.meta.llama3-2-3b-instruct-v1:0'
     af-south-1:
       NovaProfile: 'eu.amazon.nova-micro-v1:0'
-      MistralModel: 'mistral.mistral-large-2402-v1:0'
+      MistralModel: 'eu.mistral.pixtral-large-2502-v1:0'
       LlamaProfile: 'eu.meta.llama3-2-3b-instruct-v1:0'
 
 Conditions:

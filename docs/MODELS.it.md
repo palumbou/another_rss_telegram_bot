@@ -23,19 +23,22 @@ Il bot supporta tre modelli Amazon Bedrock che puoi scegliere al momento del dep
 ### 2. Mistral Large (Selezione Regionale Intelligente)
 - **Model IDs**: 
   - `mistral.mistral-large-3-675b-instruct` (preferito, 6 regioni)
-  - `mistral.mistral-large-2402-v1:0` (fallback, 9 regioni)
+  - `eu.mistral.pixtral-large-2502-v1:0` (regioni EU, inference profile cross-region)
+  - `mistral.mistral-large-2402-v1:0` (fallback, altre regioni)
 - **Selezione**: `mistral-large`
 - **Vantaggi**:
   - Eccellente traduzione multilingua (EN→IT, FR, ES, DE)
   - Comprensione del contesto e reasoning superiori
   - Mistral Large 3: 675B parametri (41B attivi - MoE), supporto multimodale
+  - Pixtral Large 25.02: successore di Large 24.02, multimodale
   - Mistral Large 24.02: Stabilità provata, solo testo
   - Supporto multilingua nativo (non traduzione come fallback)
 - **Costo**: ~$2.00 per 1M token input, ~$6.00 per 1M token output
 - **Costo mensile (150 articoli)**: ~$0.78
 - **Disponibilità regionale**:
   - **Mistral Large 3** (più recente): us-east-1, us-east-2, us-west-2, ap-northeast-1, ap-south-1, sa-east-1
-  - **Mistral Large 24.02** (fallback): us-west-1, ap-southeast-2, ca-central-1, eu-west-1/2/3, e altre 20+ regioni
+  - **Pixtral Large 25.02** (inference profile EU): eu-west-1/2/3, eu-central-1/2, eu-north-1, eu-south-1/2, il-central-1, af-south-1
+  - **Mistral Large 24.02** (fallback): us-west-1, ap-southeast-2, ca-central-1, e altre 10+ regioni
 - **Ideale per**: Deployment focalizzati sulla qualità che richiedono eccellente traduzione e reasoning
 
 ### 3. Llama 3.2 3B Instruct
@@ -295,14 +298,26 @@ Quando selezioni `mistral-large`, il bot sceglie automaticamente il miglior mode
 - ✅ Migliori capacità di reasoning
 - ✅ Pensiero esteso con reasoning step-by-step
 
-### Mistral Large 24.02 (Fallback - 9+ Regioni)
+### Pixtral Large 25.02 (Regioni EU)
+**Inference Profile ID**: `eu.mistral.pixtral-large-2502-v1:0`
+
+**Disponibile in:**
+- 🇪🇺 Europa: eu-west-1 (Irlanda), eu-west-2 (Londra), eu-west-3 (Parigi), eu-central-1/2, eu-north-1, eu-south-1/2
+- 🌍 Altre sul profilo EU: il-central-1, af-south-1
+
+**Caratteristiche:**
+- ✅ Successore di Mistral Large 24.02 (famiglia Large 2)
+- ✅ Supporto multimodale
+- ✅ Stesse eccellenti capacità multilingua
+- ✅ Servito via inference profile cross-region EU (i dati restano nella geo EU)
+
+### Mistral Large 24.02 (Fallback)
 **Model ID**: `mistral.mistral-large-2402-v1:0`
 
 **Disponibile in:**
 - 🇺🇸 US: us-west-1
 - 🇨🇦 Canada: ca-central-1
-- 🇪🇺 Europa: eu-west-1 (Irlanda), eu-west-2 (Londra), eu-west-3 (Parigi)
-- 🌏 APAC: ap-southeast-2 (Sydney), e altre 20+ regioni
+- 🌏 APAC: ap-southeast-2 (Sydney), e altre 10+ regioni
 
 **Caratteristiche:**
 - ✅ Solo testo (no multimodale)
@@ -314,15 +329,16 @@ Quando selezioni `mistral-large`, il bot sceglie automaticamente il miglior mode
 1. Fai il deployment con `--model mistral-large`
 2. CloudFormation controlla la tua regione di deployment
 3. Se la regione ha Mistral Large 3 → usa Large 3 (più recente, multimodale)
-4. Se la regione non ha Large 3 → usa Large 24.02 (stabile, solo testo)
-5. Entrambe le versioni forniscono eccellente qualità di traduzione
+4. Se la regione è nella geo EU → usa Pixtral Large 25.02 (multimodale, inference profile EU)
+5. Altrimenti → usa Large 24.02 (stabile, solo testo)
+6. Tutte le versioni forniscono eccellente qualità di traduzione
 
 **Esempio:**
 ```bash
 # Deploy in us-east-1 → Ottiene Mistral Large 3 (675B MoE, multimodale)
 ./scripts/deploy.sh --region us-east-1 --model mistral-large
 
-# Deploy in eu-west-1 → Ottiene Mistral Large 24.02 (solo testo, stabile)
+# Deploy in eu-west-1 → Ottiene Pixtral Large 25.02 (multimodale, profilo EU)
 ./scripts/deploy.sh --region eu-west-1 --model mistral-large
 ```
 
